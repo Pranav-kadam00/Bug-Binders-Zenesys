@@ -474,7 +474,7 @@ def require_user(current: Optional[dict[str, Any]] = Depends(get_current_user)) 
 
 # ── Vendor comparison / Decision Twin helpers ─────────────────────────────────
 
-def _vendor_options() -> list[dict[str, Any]]:
+def _vendor_options(product: str = None) -> list[dict[str, Any]]:
     if ODOO_URL and ODOO_DB and ODOO_USERNAME and ODOO_PASSWORD:
         try:
             common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL))
@@ -485,12 +485,36 @@ def _vendor_options() -> list[dict[str, Any]]:
                 odoo_vendors = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD,
                     'res.partner', 'search_read',
                     [domain],
-                    {'fields': ['id', 'name'], 'limit': 15}
+                    {'fields': ['id', 'name', 'category_id'], 'limit': 50}
                 )
                 
+                # Fetch category names to filter by product
+                all_cat_ids = list({cid for v in odoo_vendors for cid in v.get('category_id', [])})
+                cat_map = {}
+                if all_cat_ids:
+                    cats = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.partner.category', 'search_read', [[['id', 'in', all_cat_ids]]], {'fields': ['id', 'name']})
+                    cat_map = {c['id']: c['name'] for c in cats}
+                
+                filtered_vendors = odoo_vendors
+                if product:
+                    kw = product.lower()
+                    filtered_vendors = []
+                    for v in odoo_vendors:
+                        vendor_cat = cat_map.get(v.get('category_id', [0])[0], "").lower() if v.get('category_id') else ""
+                        if kw in v["name"].lower() or kw in vendor_cat:
+                            filtered_vendors.append(v)
+                            
+                    # AI FALLBACK
+                    if len(filtered_vendors) == 0:
+                        new_vs = _simulate_internet_search_and_add_to_odoo(product)
+                        for nv in new_vs:
+                            filtered_vendors.append({"id": nv["id"], "name": nv["companyName"]})
+                
+                if len(filtered_vendors) == 0:
+                     filtered_vendors = odoo_vendors[:15] # absolute fallback
+                     
                 results = []
-                for i, v in enumerate(odoo_vendors):
-                    # Generate some realistic mock scores based on their ID to keep it deterministic
+                for i, v in enumerate(filtered_vendors[:10]):
                     base_score = 90 - (i * 2)
                     results.append({
                         "vendorId": v["id"], "vendorName": v["name"],
@@ -528,7 +552,7 @@ def _vendor_options() -> list[dict[str, Any]]:
     ]
 
 
-def _decision_twin_analyses() -> list[dict[str, Any]]:
+def _decision_twin_analyses(product: str = None) -> list[dict[str, Any]]:
     if ODOO_URL and ODOO_DB and ODOO_USERNAME and ODOO_PASSWORD:
         try:
             common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL))
@@ -539,11 +563,36 @@ def _decision_twin_analyses() -> list[dict[str, Any]]:
                 odoo_vendors = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD,
                     'res.partner', 'search_read',
                     [domain],
-                    {'fields': ['id', 'name'], 'limit': 15}
+                    {'fields': ['id', 'name', 'category_id'], 'limit': 50}
                 )
                 
+                # Fetch category names to filter by product
+                all_cat_ids = list({cid for v in odoo_vendors for cid in v.get('category_id', [])})
+                cat_map = {}
+                if all_cat_ids:
+                    cats = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.partner.category', 'search_read', [[['id', 'in', all_cat_ids]]], {'fields': ['id', 'name']})
+                    cat_map = {c['id']: c['name'] for c in cats}
+                
+                filtered_vendors = odoo_vendors
+                if product:
+                    kw = product.lower()
+                    filtered_vendors = []
+                    for v in odoo_vendors:
+                        vendor_cat = cat_map.get(v.get('category_id', [0])[0], "").lower() if v.get('category_id') else ""
+                        if kw in v["name"].lower() or kw in vendor_cat:
+                            filtered_vendors.append(v)
+                            
+                    # AI FALLBACK
+                    if len(filtered_vendors) == 0:
+                        new_vs = _simulate_internet_search_and_add_to_odoo(product)
+                        for nv in new_vs:
+                            filtered_vendors.append({"id": nv["id"], "name": nv["companyName"]})
+                
+                if len(filtered_vendors) == 0:
+                     filtered_vendors = odoo_vendors[:15]
+                     
                 results = []
-                for i, v in enumerate(odoo_vendors):
+                for i, v in enumerate(filtered_vendors[:10]):
                     price = 500000.0 - (i * 10000)
                     delay_risk = 5.0 + (i * 3.0)
                     impact = 10000.0 * (i + 1)
@@ -768,6 +817,22 @@ def create_request(
         "items": items_with_id,
     }
     _requests.insert(0, req)
+    
+    # Automatically add it to the approvals queue
+    new_app_id = max((a["id"] for a in _approvals), default=0) + 1
+    _approvals.insert(0, {
+        "id": new_app_id,
+        "requestNumber": req["requestNumber"],
+        "title": req["title"],
+        "requester": req["requester"],
+        "amount": req["budget"],
+        "status": "Pending",
+        "approver": "Procurement Manager", # default mock routing
+        "level": 1,
+        "comment": None,
+        "createdAt": req["createdAt"],
+    })
+    
     return {k: v for k, v in req.items() if k != "items"}
 
 
@@ -1026,13 +1091,82 @@ def _simulate_internet_search_and_add_to_odoo(product: str) -> list[dict[str, An
     return results
 
 
-@app.post("/api/v1/vendors/discover", tags=["vendors"], summary="Discover qualified bulk vendors")
+@app.post("/api/v1/vendors/bulk-discover", tags=["vendors"], summary="Discover qualified bulk vendors")
 def discover_bulk_vendors(
     payload: VendorDiscoveryRequest,
     _: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
     try:
-        return _vendor_discovery_service.discover(payload, _vendor_repository.discovery_vendors(_vendors))
+        odoo_mapped = []
+        if ODOO_URL and ODOO_DB and ODOO_USERNAME and ODOO_PASSWORD:
+            try:
+                common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL))
+                uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD, {})
+                if uid:
+                    models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(ODOO_URL))
+                    
+                    odoo_vendors = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD,
+                        'res.partner', 'search_read',
+                        [[('supplier_rank', '>', 0)]],
+                        {'fields': ['id', 'name', 'city', 'category_id'], 'limit': 50}
+                    )
+                    
+                    all_cat_ids = list({cid for v in odoo_vendors for cid in v.get('category_id', [])})
+                    cat_map = {}
+                    if all_cat_ids:
+                        cats = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.partner.category', 'search_read', [[['id', 'in', all_cat_ids]]], {'fields': ['id', 'name']})
+                        cat_map = {c['id']: c['name'] for c in cats}
+                    
+                    filtered = []
+                    kw = payload.product_name.lower()
+                    for v in odoo_vendors:
+                        vendor_cat = cat_map.get(v.get('category_id', [0])[0], "").lower() if v.get('category_id') else ""
+                        if kw in v["name"].lower() or kw in vendor_cat:
+                            filtered.append(v)
+                            
+                    # AI FALLBACK for Bulk Discovery
+                    if len(filtered) == 0:
+                        new_vs = _simulate_internet_search_and_add_to_odoo(payload.product_name)
+                        for nv in new_vs:
+                            # Re-map so it has 'id', 'name', 'city'
+                            filtered.append({"id": nv["id"], "name": nv["companyName"], "city": nv["location"]})
+                            
+                    # If still 0, absolute fallback
+                    if len(filtered) == 0:
+                         filtered = odoo_vendors[:15]
+                         
+                    CITY_COORDS = {
+                        "pune": (18.5204, 73.8567), "mumbai": (19.0760, 72.8777), "bengaluru": (12.9716, 77.5946),
+                        "hyderabad": (17.3850, 78.4867), "chennai": (13.0827, 80.2707), "delhi": (28.6139, 77.2090),
+                        "noida": (28.5355, 77.3910), "gurugram": (28.4595, 77.0266), "kolkata": (22.5726, 88.3639),
+                        "ahmedabad": (23.0225, 72.5714), "jaipur": (26.9124, 75.7873),
+                    }
+                    
+                    import random
+                    for idx, v in enumerate(filtered):
+                        city = v.get("city") or "Pune"
+                        lat, lon = CITY_COORDS.get(city.lower(), (18.5204 + random.uniform(-1, 1), 73.8567 + random.uniform(-1, 1)))
+                        
+                        odoo_mapped.append({
+                            "id": v["id"], "companyName": v["name"], "category": payload.category or "General", 
+                            "location": f"{city}, IN", "rating": 4.5, "status": "Active", 
+                            "latitude": lat, "longitude": lon, 
+                            "reliability": 90, "bulkOrderSupported": True, 
+                            "minimumOrderQuantity": 1, "maximumSupplyCapacity": 100000, 
+                            "deliveryRadiusKm": 100, 
+                            "capabilities": [{
+                                "productName": payload.product_name, "productCategory": payload.category or "General", 
+                                "minimumOrderQuantity": 1, "availableQuantity": random.randint(payload.required_quantity, payload.required_quantity * 5), 
+                                "maximumOrderCapacity": 100000, "bulkPrice": random.randint(100, 50000), 
+                                "unit": payload.unit, "deliveryAvailable": True, "leadTimeDays": random.randint(2, 10)
+                            }]
+                        })
+            except Exception as e:
+                print(f"Odoo bulk discovery error: {e}")
+                
+        # Use odoo vendors if available, else fallback
+        final_vendors = odoo_mapped if len(odoo_mapped) > 0 else _vendor_repository.discovery_vendors(_vendors)
+        return _vendor_discovery_service.discover(payload, final_vendors)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 
@@ -1227,6 +1361,39 @@ def comparison(
     }
 
 
+class NegotiationRequest(BaseModel):
+    productName: str
+    quantity: int
+    currentPrice: float
+
+@app.post("/api/v1/vendors/{id}/negotiate", tags=["vendors"], summary="Simulate AI negotiation with vendor")
+def negotiate_with_vendor(
+    id: int,
+    payload: NegotiationRequest,
+    _: dict[str, Any] = Depends(require_user),
+) -> dict[str, Any]:
+    vendor = next((v for v in _vendors if v["id"] == id), None)
+    vendor_name = vendor["companyName"] if vendor else f"Vendor {id}"
+        
+    import random
+    success = random.choice([True, True, False])
+    discount = random.uniform(0.05, 0.15) if success else 0
+    final_price = round(payload.currentPrice * (1 - discount), 2)
+    
+    thread = [
+        {"sender": "AQURA AI", "message": f"Hello {vendor_name} team. We are looking to procure {payload.quantity} units of {payload.productName}. Your current quoted price is {payload.currentPrice:,.2f}. Given our long-term partnership, can you offer a volume discount?"},
+        {"sender": vendor_name, "message": f"Hi AQURA. For {payload.quantity} units, we can offer a {round(discount*100)}% discount, bringing the unit price down to {final_price:,.2f}." if success else f"Hi AQURA. Unfortunately, {payload.currentPrice:,.2f} is our absolute floor price at the moment due to current supply constraints."},
+        {"sender": "AQURA AI", "message": "Excellent, we will proceed with this updated pricing and update our ERP." if success else "Understood, thank you for confirming. We will evaluate our options."}
+    ]
+    
+    return {
+        "success": success,
+        "originalPrice": payload.currentPrice,
+        "negotiatedPrice": final_price,
+        "savings": round((payload.currentPrice - final_price) * payload.quantity, 2),
+        "thread": thread
+    }
+
 # ── Decision Twin ─────────────────────────────────────────────────────────────
 
 @app.get("/api/v1/decision-twin/{purchaseRequestId}", tags=["intelligence"], summary="Simulate procurement outcomes (Decision Twin)")
@@ -1286,7 +1453,7 @@ def create_purchase_order(
     order: dict[str, Any] = {
         "id": new_id,
         "poNumber": f"PO-{2086 + new_id}",
-        "vendor": vendor["companyName"],
+        "vendor": vendor["companyName"] if "companyName" in vendor else f"Vendor {payload.vendorId}",
         "requestNumber": req["requestNumber"],
         "amount": req["budget"],
         "expectedDelivery": req["requiredDate"],
@@ -1300,6 +1467,45 @@ def create_purchase_order(
             {"id": 1, "action": "Purchase order created", "actor": current["name"], "timestamp": date.today().isoformat()},
         ],
     }
+    
+    # Sync PO to Odoo!
+    if ODOO_URL and ODOO_DB and ODOO_USERNAME and ODOO_PASSWORD:
+        try:
+            common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL))
+            uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD, {})
+            if uid:
+                models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(ODOO_URL))
+                
+                order_lines = []
+                for item in req.get("items", []):
+                    product_name = item.get("itemName", "Misc Item")
+                    # Find or create product in Odoo
+                    prod_ids = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'product.product', 'search', [[('name', '=', product_name)]])
+                    if prod_ids:
+                        prod_id = prod_ids[0]
+                    else:
+                        prod_id = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'product.product', 'create', [{'name': product_name, 'type': 'consu', 'purchase_ok': True}])
+                    
+                    order_lines.append((0, 0, {
+                        'product_id': prod_id,
+                        'name': product_name,
+                        'product_qty': item.get("quantity", 1),
+                        'price_unit': item.get("estimatedUnitPrice", 0),
+                    }))
+                    
+                odoo_po_id = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'purchase.order', 'create', [{
+                    'partner_id': payload.vendorId,
+                    'order_line': order_lines,
+                }])
+                print(f"Successfully created PO in Odoo! Odoo PO ID: {odoo_po_id}")
+                
+                # Fetch the generated PO name from Odoo (e.g. P00015)
+                odoo_po = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'purchase.order', 'read', [[odoo_po_id]], {'fields': ['name']})
+                if odoo_po:
+                    order["poNumber"] = odoo_po[0]["name"]  # Use the real Odoo PO Number in the UI!
+                    
+        except Exception as e:
+            print(f"Failed to sync PO to Odoo: {e}")
     _purchase_orders.append(order)
     return {k: v for k, v in order.items() if k not in {"items", "timeline"}}
 

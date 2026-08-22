@@ -1155,7 +1155,7 @@ export const getDiscoverBulkVendorsUrl = () => {
 
 
 
-  return `/api/v1/vendors/discover`
+  return `/api/v1/vendors/bulk-discover`
 }
 
 /**
