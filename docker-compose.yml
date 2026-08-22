@@ -1,0 +1,66 @@
+version: "3.9"
+
+# ─── AQURA — local Docker Compose ────────────────────────────────────────────
+#
+# Starts the FastAPI backend and the Vite frontend preview bundle together.
+# The Supabase PostgreSQL database remains externally hosted — set DATABASE_URL
+# in backend/.env before running.
+#
+# Quick start:
+#   cp backend/.env.example backend/.env   # fill in DATABASE_URL + JWT_SECRET
+#   cp artifacts/aqura/.env.example artifacts/aqura/.env
+#   docker compose up --build
+#
+# Access:
+#   Frontend  →  http://localhost:5173
+#   Backend   →  http://localhost:8000
+#   Swagger   →  http://localhost:8000/api/docs
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── FastAPI backend ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: aqura-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - backend/.env
+    environment:
+      # Ensure the frontend origin is allowed even when running via Docker
+      CORS_ORIGINS: "http://localhost:5173,http://localhost:4173,http://frontend:4173"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - aqura-net
+
+  # ── Vite / React frontend ────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: artifacts/aqura/Dockerfile
+    container_name: aqura-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:4173"
+    env_file:
+      - artifacts/aqura/.env
+    environment:
+      VITE_API_BASE_URL: "http://localhost:8000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - aqura-net
+
+networks:
+  aqura-net:
+    driver: bridge

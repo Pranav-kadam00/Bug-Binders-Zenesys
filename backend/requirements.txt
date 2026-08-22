@@ -1,0 +1,24 @@
+# ── Core framework ────────────────────────────────────────────────────────────
+# Minimum versions compatible with Python 3.9+.
+# On Python 3.13 (Replit / Docker) you will automatically get the latest release.
+fastapi>=0.100.0
+uvicorn[standard]>=0.20.0
+
+# ── Data validation ───────────────────────────────────────────────────────────
+pydantic>=2.0.0
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+
+# ── Authentication ────────────────────────────────────────────────────────────
+python-jose[cryptography]>=3.3.0
+# passlib 1.7.4 is incompatible with bcrypt>=4.1 — pin bcrypt to 4.0.x
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0,<4.1.0
+
+# ── Environment ───────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+
+# ── Multipart / form data (needed for OAuth2PasswordRequestForm) ──────────────
+python-multipart>=0.0.6
