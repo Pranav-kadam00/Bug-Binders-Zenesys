@@ -5,10 +5,12 @@
  * AQURA procurement intelligence API
  * OpenAPI spec version: 0.1.0
  */
+import type { RequestItemInputItemType } from './requestItemInputItemType';
 export interface RequestItemInput {
     itemName: string;
     description?: string;
     category?: string;
+    itemType?: RequestItemInputItemType;
     /** @minimum 1 */
     quantity: number;
     unit: string;

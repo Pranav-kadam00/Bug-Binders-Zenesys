@@ -13,6 +13,24 @@ export declare const HealthCheckResponse: zod.ZodObject<{
     status: zod.ZodString;
 }, zod.z.core.$strip>;
 /**
+ * @summary User login
+ */
+export declare const LoginBody: zod.ZodObject<{
+    username: zod.ZodString;
+    password: zod.ZodString;
+}, zod.z.core.$strip>;
+export declare const LoginResponse: zod.ZodObject<{
+    access_token: zod.ZodString;
+    token_type: zod.ZodString;
+    user: zod.ZodObject<{
+        id: zod.ZodOptional<zod.ZodInt>;
+        name: zod.ZodOptional<zod.ZodString>;
+        email: zod.ZodOptional<zod.ZodString>;
+        role: zod.ZodOptional<zod.ZodString>;
+        department: zod.ZodOptional<zod.ZodString>;
+    }, zod.z.core.$strip>;
+}, zod.z.core.$strip>;
+/**
  * @summary Get procurement dashboard
  */
 export declare const GetDashboardResponse: zod.ZodObject<{
@@ -89,6 +107,10 @@ export declare const CreatePurchaseRequestBody: zod.ZodObject<{
         itemName: zod.ZodString;
         description: zod.ZodOptional<zod.ZodString>;
         category: zod.ZodOptional<zod.ZodString>;
+        itemType: zod.ZodOptional<zod.ZodEnum<{
+            Product: "Product";
+            Service: "Service";
+        }>>;
         quantity: zod.ZodInt;
         unit: zod.ZodString;
         estimatedUnitPrice: zod.ZodNumber;
@@ -130,6 +152,10 @@ export declare const GetPurchaseRequestResponse: zod.ZodIntersection<zod.ZodObje
         itemName: zod.ZodString;
         description: zod.ZodOptional<zod.ZodString>;
         category: zod.ZodOptional<zod.ZodString>;
+        itemType: zod.ZodOptional<zod.ZodEnum<{
+            Product: "Product";
+            Service: "Service";
+        }>>;
         quantity: zod.ZodInt;
         unit: zod.ZodString;
         estimatedUnitPrice: zod.ZodNumber;
@@ -304,6 +330,18 @@ export declare const GetVendorResponse: zod.ZodIntersection<zod.ZodObject<{
         timestamp: zod.ZodString;
     }, zod.z.core.$strip>>;
 }, zod.z.core.$strip>>;
+/**
+ * @summary Contact a vendor
+ */
+export declare const ContactVendorParams: zod.ZodObject<{
+    id: zod.z.ZodCoercedNumber<unknown>;
+}, zod.z.core.$strip>;
+export declare const ContactVendorBody: zod.ZodObject<{
+    message: zod.ZodString;
+}, zod.z.core.$strip>;
+export declare const ContactVendorResponse: zod.ZodObject<{
+    success: zod.ZodOptional<zod.ZodBoolean>;
+}, zod.z.core.$strip>;
 /**
  * @summary Discover vendors for a product
  */
