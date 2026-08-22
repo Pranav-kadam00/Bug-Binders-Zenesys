@@ -1,1 +1,38 @@
-node_modules
+# ── Node ──────────────────────────────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
+dist/
+dist/public/
+build/
+.tsbuildinfo
+
+# ── Python ────────────────────────────────────────────────────────────────────
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+
+# ── Environment files (never commit secrets) ──────────────────────────────────
+.env
+.env.local
+.env.production
+
+# ── OS / editor ───────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
