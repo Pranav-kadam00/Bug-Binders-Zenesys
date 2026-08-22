@@ -32,6 +32,10 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field
 
+from .schemas.vendor_discovery import VendorDiscoveryRequest
+from .repositories.vendor_repository import VendorRepository
+from .services.vendor_discovery_service import VendorDiscoveryService
+
 # ── Load .env ────────────────────────────────────────────────────────────────
 load_dotenv()
 
@@ -186,6 +190,53 @@ _vendors: list[dict[str, Any]] = [
         "totalOrders": 31,
     },
 ]
+
+# Demo capability records mirror the fields persisted by the production vendor
+# and vendor-product-capability tables. They keep the local fallback fully testable.
+_discovery_capabilities = {
+    1: (12.9716, 77.5946, 80, 500, 1000, "Business laptop", 20, 800, 44000, 5, True),
+    2: (19.0760, 72.8777, 120, 500, 1000, "Business laptop", 20, 1200, 42500, 7, True),
+    3: (18.5204, 73.8567, 35, 40, 10, "Ergonomic office chair", 10, 250, 2100, 4, True),
+    4: (17.3850, 78.4867, 80, 100, 1, "Cloud observability license", 1, 100, 4500, 2, True),
+    5: (13.0827, 80.2707, 50, 10000, 500, "Industrial equipment", 500, 5000, 18500, 9, True),
+}
+for _vendor in _vendors:
+    _latitude, _longitude, _delivery_radius, _available, _minimum, _product_name, _minimum_capacity, _maximum_capacity, _bulk_price, _lead_time, _delivery = _discovery_capabilities[_vendor["id"]]
+    _vendor.update({
+        "latitude": _latitude, "longitude": _longitude, "country": "India",
+        "bulkOrderSupported": True, "minimumOrderQuantity": _minimum,
+        "maximumSupplyCapacity": _maximum_capacity, "deliveryRadiusKm": _delivery_radius,
+        "averageBulkPrice": _bulk_price,
+        "capabilities": [{"productName": _product_name, "productCategory": _vendor["category"], "minimumOrderQuantity": _minimum, "availableQuantity": _available, "maximumOrderCapacity": _maximum_capacity, "bulkPrice": _bulk_price, "unit": "units", "deliveryAvailable": _delivery, "leadTimeDays": _lead_time, "isActive": True}],
+        "defaultCapability": {"productName": _product_name, "availableQuantity": _available, "maximumOrderCapacity": _maximum_capacity, "bulkPrice": _bulk_price, "minimumOrderQuantity": _minimum, "deliveryAvailable": _delivery, "leadTimeDays": _lead_time},
+    })
+
+_seed_locations = [
+    ("Pune BuildMart", "Construction Materials", "Pune", 18.59, 73.74, "Cement", 5000, 30000, 92),
+    ("Pune Office Works", "Office Supplies", "Pune", 18.56, 73.78, "Ergonomic office chair", 80, 500, 2150),
+    ("Mumbai Industrial Hub", "Industrial Supplies", "Mumbai", 19.12, 72.92, "Industrial equipment", 1000, 15000, 17800),
+    ("Mumbai Tech Depot", "IT Hardware", "Mumbai", 19.02, 72.86, "Business laptop", 30, 900, 41800),
+    ("Bengaluru Device House", "IT Hardware", "Bengaluru", 12.93, 77.62, "Business laptop", 25, 600, 43500),
+    ("Bengaluru Workspace", "Furniture", "Bengaluru", 13.01, 77.56, "Ergonomic office chair", 50, 400, 2050),
+    ("Hyderabad Cloud Supply", "Cloud Services", "Hyderabad", 17.44, 78.39, "Cloud observability license", 1, 200, 4300),
+    ("Hyderabad Hardware Co", "IT Hardware", "Hyderabad", 17.35, 78.51, "Business laptop", 20, 500, 42750),
+    ("Chennai Packworks", "Packaging", "Chennai", 13.06, 80.25, "Packaging boxes", 500, 25000, 18),
+    ("Chennai Industrial", "Industrial Supplies", "Chennai", 12.99, 80.21, "Industrial equipment", 250, 8000, 18200),
+    ("Delhi Raw Materials", "Raw Materials", "Delhi", 28.63, 77.22, "Cement", 1000, 50000, 89),
+    ("Delhi Office Source", "Office Supplies", "Delhi", 28.57, 77.31, "Ergonomic office chair", 20, 700, 1980),
+    ("Kolkata Supply Network", "Packaging", "Kolkata", 22.57, 88.39, "Packaging boxes", 200, 12000, 20),
+    ("Ahmedabad Material House", "Construction Materials", "Ahmedabad", 23.05, 72.59, "Cement", 500, 40000, 90),
+    ("Jaipur Furnishings", "Furniture", "Jaipur", 26.91, 75.79, "Ergonomic office chair", 25, 600, 2025),
+]
+for _index, (_name, _category, _city, _latitude, _longitude, _product, _minimum, _capacity, _price) in enumerate(_seed_locations, start=6):
+    _vendors.append({
+        "id": _index, "companyName": _name, "category": _category, "location": f"{_city}, IN", "rating": round(4.0 + (_index % 9) / 10, 1), "performance": 76 + (_index % 22), "reliability": 74 + (_index % 25), "status": "Active", "contactPerson": "Vendor desk", "email": f"desk{_index}@aqura.example", "address": _city, "latitude": _latitude, "longitude": _longitude, "bulkOrderSupported": True, "minimumOrderQuantity": _minimum, "maximumSupplyCapacity": _capacity, "deliveryRadiusKm": 75, "averageBulkPrice": _price,
+        "capabilities": [{"productName": _product, "productCategory": _category, "minimumOrderQuantity": _minimum, "availableQuantity": _capacity, "maximumOrderCapacity": _capacity, "bulkPrice": _price, "unit": "units", "deliveryAvailable": True, "leadTimeDays": 2 + (_index % 7), "isActive": True}],
+        "defaultCapability": {"productName": _product, "availableQuantity": _capacity, "maximumOrderCapacity": _capacity, "bulkPrice": _price, "minimumOrderQuantity": _minimum, "deliveryAvailable": True, "leadTimeDays": 2 + (_index % 7)},
+    })
+
+_vendor_discovery_service = VendorDiscoveryService()
+_vendor_repository = VendorRepository(DATABASE_URL)
 
 _requests: list[dict[str, Any]] = [
     {
@@ -960,6 +1011,17 @@ def _simulate_internet_search_and_add_to_odoo(product: str) -> list[dict[str, An
             print(f"Failed to add internet vendors to Odoo: {e}")
             
     return results
+
+
+@app.post("/api/v1/vendors/discover", tags=["vendors"], summary="Discover qualified bulk vendors")
+def discover_bulk_vendors(
+    payload: VendorDiscoveryRequest,
+    _: dict[str, Any] = Depends(require_user),
+) -> dict[str, Any]:
+    try:
+        return _vendor_discovery_service.discover(payload, _vendor_repository.discovery_vendors(_vendors))
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.get("/api/v1/vendors", tags=["vendors"], summary="List vendors")

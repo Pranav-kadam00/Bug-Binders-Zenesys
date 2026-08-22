@@ -43,6 +43,8 @@ import type {
   Vendor,
   VendorComparison,
   VendorDetail,
+  VendorDiscoveryRequest,
+  VendorDiscoveryResponse,
   VendorInput,
   VendorList,
   VendorPerformance
@@ -997,6 +999,77 @@ export function useDiscoverVendors<TData = Awaited<ReturnType<typeof discoverVen
 
 
 
+
+export const getDiscoverBulkVendorsUrl = () => {
+
+
+
+
+  return `/api/v1/vendors/discover`
+}
+
+/**
+ * @summary Discover qualified vendors for a bulk order
+ */
+export const discoverBulkVendors = async (vendorDiscoveryRequest: VendorDiscoveryRequest, options?: Parameters<typeof customFetch>[1]): Promise<VendorDiscoveryResponse> => {
+
+  return customFetch<VendorDiscoveryResponse>(getDiscoverBulkVendorsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vendorDiscoveryRequest)
+  }
+);}
+
+
+
+
+
+export const getDiscoverBulkVendorsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof discoverBulkVendors>>, TError,{data: BodyType<VendorDiscoveryRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof discoverBulkVendors>>, TError,{data: BodyType<VendorDiscoveryRequest>}, TContext> => {
+
+const mutationKey = ['discoverBulkVendors'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof discoverBulkVendors>>, {data: BodyType<VendorDiscoveryRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  discoverBulkVendors(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DiscoverBulkVendorsMutationResult = NonNullable<Awaited<ReturnType<typeof discoverBulkVendors>>>
+    export type DiscoverBulkVendorsMutationBody = BodyType<VendorDiscoveryRequest>
+    export type DiscoverBulkVendorsMutationError = ErrorType<void>
+
+    /**
+ * @summary Discover qualified vendors for a bulk order
+ */
+export const useDiscoverBulkVendors = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof discoverBulkVendors>>, TError,{data: BodyType<VendorDiscoveryRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof discoverBulkVendors>>,
+        TError,
+        {data: BodyType<VendorDiscoveryRequest>},
+        TContext
+      > => {
+      return useMutation(getDiscoverBulkVendorsMutationOptions(options));
+    }
 
 export const getGetVendorComparisonUrl = (purchaseRequestId: number,) => {
 
