@@ -134,6 +134,87 @@ export interface VendorInput {
   email?: string;
 }
 
+export interface DiscoveryLocation {
+  address?: string;
+  city?: string;
+  pincode?: string;
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  latitude?: number;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  longitude?: number;
+}
+
+export type VendorDiscoveryRequestSortPreference = typeof VendorDiscoveryRequestSortPreference[keyof typeof VendorDiscoveryRequestSortPreference];
+
+
+export const VendorDiscoveryRequestSortPreference = {
+  recommended: 'recommended',
+  price: 'price',
+  distance: 'distance',
+  delivery: 'delivery',
+  reliability: 'reliability',
+} as const;
+
+export interface VendorDiscoveryRequest {
+  /** @minLength 1 */
+  productName: string;
+  category?: string;
+  /** @exclusiveMinimum 0 */
+  requiredQuantity: number;
+  /** @minLength 1 */
+  unit: string;
+  location: DiscoveryLocation;
+  /** @exclusiveMinimum 0 */
+  initialRadiusKm?: number;
+  /**
+     * @maximum 500
+     * @exclusiveMinimum 0
+     */
+  maximumRadiusKm?: number;
+  autoExpandRadius?: boolean;
+  /**
+     * @minimum 1
+     * @maximum 100
+     */
+  minimumVendorResults?: number;
+  allowPartialFulfillment?: boolean;
+  sortPreference?: VendorDiscoveryRequestSortPreference;
+}
+
+export type VendorDiscoveryResponseDataSearch = { [key: string]: unknown };
+
+export type VendorDiscoveryResponseDataBuyerLocation = { [key: string]: unknown };
+
+export type VendorDiscoveryResponseDataRadiusSearchSummary = { [key: string]: unknown };
+
+export type VendorDiscoveryResponseDataVendorsItem = { [key: string]: unknown };
+
+export type VendorDiscoveryResponseDataRadiusLevelsItem = { [key: string]: unknown };
+
+export type VendorDiscoveryResponseDataMultiVendorFulfillment = { [key: string]: unknown } | null;
+
+export type VendorDiscoveryResponseData = {
+  search: VendorDiscoveryResponseDataSearch;
+  buyer_location: VendorDiscoveryResponseDataBuyerLocation;
+  radius_search_summary: VendorDiscoveryResponseDataRadiusSearchSummary;
+  insight: string;
+  vendors: VendorDiscoveryResponseDataVendorsItem[];
+  radius_levels: VendorDiscoveryResponseDataRadiusLevelsItem[];
+  multi_vendor_fulfillment?: VendorDiscoveryResponseDataMultiVendorFulfillment;
+};
+
+export interface VendorDiscoveryResponse {
+  success: boolean;
+  message: string;
+  data: VendorDiscoveryResponseData;
+}
+
 export interface VendorMetric {
   label: string;
   value: number;
