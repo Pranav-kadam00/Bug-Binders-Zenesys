@@ -16,7 +16,9 @@ import {
   useGetAnalytics, useGetDashboard, useGetDecisionTwin, useGetOrderTracking, useGetPurchaseOrder, useGetPurchaseRequest,
   useGetVendor, useGetVendorComparison, useGetVendorPerformance, useDiscoverVendors, useHealthCheck,
   useListApprovals, useListNotifications, useListPurchaseOrders, useListPurchaseRequests, useListVendors,
-  useMarkAllNotificationsRead, useRejectRequest
+  useMarkAllNotificationsRead, useRejectRequest,
+  useLogin,
+  setAuthTokenGetter
 } from "@workspace/api-client-react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Toaster } from "@/components/ui/toaster";
@@ -25,7 +27,6 @@ import NotFound from "@/pages/not-found";
 import VendorDiscoveryPage from "@/features/vendor-discovery/components/VendorDiscoveryPage";
 import "./index.css";
 
-import { setAuthTokenGetter } from "@workspace/api-client-react";
 setAuthTokenGetter(() => localStorage.getItem("aqura_token") || "");
 function useUser() {
   try { return JSON.parse(localStorage.getItem("aqura_user") || "null"); } catch { return null; }
@@ -127,15 +128,64 @@ function Landing() {
 
 function Auth({ mode }: { mode: "login" | "register" | "forgot" | "reset" }) {
   const [sent, setSent] = useState(false); const [location, setLocation] = useLocation();
+  const login = useLogin();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const copy = { login: ["Welcome back", "Your decisions are waiting.", "Sign in to your AQURA workspace"], register: ["Make the next purchase clearer", "Set up your command center.", "Create an AQURA workspace"], forgot: ["Find your way back", "We’ll send a secure reset link.", "Enter your work email"], reset: ["Set a new key", "Keep your workspace protected.", "Choose a new password"] }[mode];
   if (sent) return <div className="grid min-h-[100dvh] place-items-center bg-background px-6"><div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-xl shadow-foreground/5"><div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary/10 text-primary"><Check size={24} /></div><h1 className="mt-5 font-serif text-3xl font-bold">Check your inbox</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">The secure link is on its way. You can close this window.</p><Link href="/login" data-testid="link-return-login" className="mt-7 inline-flex text-sm font-bold text-primary">Return to sign in <ArrowRight size={15} className="ml-2" /></Link></div></div>;
   return <div className="grid min-h-[100dvh] bg-sidebar lg:grid-cols-[.9fr_1.1fr]"><div className="relative hidden overflow-hidden p-10 lg:block"><div className="absolute inset-0 aqura-grid opacity-10" /><div className="relative"><Logo light /><div className="mt-36 max-w-md"><p className="text-[11px] font-bold uppercase tracking-[.18em] text-primary">Procurement, considered</p><h2 className="mt-5 font-serif text-5xl font-bold leading-[1.02] text-white">Good decisions leave a trail.</h2><p className="mt-6 leading-7 text-sidebar-foreground/60">A workspace for teams who know that purchase price is only the beginning of the story.</p></div></div></div><div className="flex items-center justify-center bg-background px-6 py-12"><div className="w-full max-w-[430px]"><div className="mb-12 lg:hidden"><Logo /></div><Link href="/" data-testid="link-auth-back" className="mb-10 inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground"><ChevronLeft size={14} /> Back to AQURA</Link><p className="text-[11px] font-bold uppercase tracking-[.18em] text-primary">{copy[2]}</p><h1 className="mt-3 font-serif text-4xl font-bold">{copy[0]}</h1><p className="mt-2 text-sm text-muted-foreground">{copy[1]}</p><form className="mt-9 space-y-5" onSubmit={async (e) => { e.preventDefault(); if (mode === "login") { const email = (e.target as any).elements[0].value; const pass = (e.target as any).elements[1].value; const fd = new URLSearchParams(); fd.append("username", email); fd.append("password", pass); const r = await fetch("http://localhost:8000/api/v1/auth/login", { method: "POST", body: fd }); if (r.ok) { const d = await r.json(); localStorage.setItem("aqura_token", d.access_token); localStorage.setItem("aqura_user", JSON.stringify(d.user)); window.location.href = "/dashboard"; } else { alert("Invalid email or password"); } } else setSent(true); }}><div><label className="mb-2 block text-xs font-bold text-foreground">Work email</label><input required type="email" placeholder="maya@aqura.demo" data-testid="input-auth-email" className="h-12 w-full rounded-lg border border-input bg-card px-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" /></div>{mode !== "forgot" && <div><label className="mb-2 block text-xs font-bold text-foreground">{mode === "register" ? "Create password" : "Password"}</label><input required type="password" placeholder="••••••••••••" data-testid="input-auth-password" className="h-12 w-full rounded-lg border border-input bg-card px-4 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/15" /></div>}{mode === "register" && <div><label className="mb-2 block text-xs font-bold">Your role</label><select data-testid="select-auth-role" className="h-12 w-full rounded-lg border border-input bg-card px-4 text-sm"><option>Procurement lead</option><option>Finance partner</option><option>Operations</option></select></div>}<button type="submit" data-testid="button-auth-submit" className="h-12 w-full rounded-lg bg-primary text-sm font-bold text-primary-foreground shadow-lg shadow-primary/15 hover:-translate-y-0.5">{mode === "login" ? "Sign in to workspace" : mode === "register" ? "Create workspace" : "Send secure link"} <ArrowRight className="ml-2 inline-block" size={16} /></button></form><div className="mt-6 text-center text-xs text-muted-foreground">{mode === "login" ? <><Link href="/forgot-password" data-testid="link-forgot-password" className="font-semibold text-primary">Forgot password?</Link><span className="mx-2">·</span><Link href="/register" data-testid="link-register" className="font-semibold text-primary">Create workspace</Link></> : <Link href="/login" data-testid="link-auth-signin" className="font-semibold text-primary">Already have a workspace? Sign in</Link>}</div><p className="mt-12 text-center text-[11px] leading-5 text-muted-foreground">By continuing, you agree to the AQURA workspace terms and privacy policy.</p></div></div></div>;
 }
 
+function useLiveClock() {
+  const [now, setNow] = useState(new Date());
+  useState(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); });
+  return now;
+}
+
 function Dashboard() {
+  const now = useLiveClock();
   const { data, isLoading, isError, refetch } = useGetDashboard({ query: { queryKey: getGetDashboardQueryKey() } }); if (isLoading) return <LoadingPage />; if (isError) return <ErrorState retry={refetch} />;
-  const d = data as any; const metrics = d?.metrics ?? { activeRequests: 12, pendingApprovals: 4, activeOrders: 8, totalSpend: 642800 }; const requests = d?.recentRequests ?? demoRequests; const spend = d?.monthlySpend ?? [{month:"Jan",amount:52000},{month:"Feb",amount:69000},{month:"Mar",amount:61000},{month:"Apr",amount:84000},{month:"May",amount:73000},{month:"Jun",amount:98000}]; const insights = d?.insights ?? [{id:1,kind:"risk",title:"One request needs context",detail:"PR-1048 has a 12.8% delay risk against an August requirement.",tone:"amber"},{id:2,kind:"saving",title:"A pattern worth repeating",detail:"Preferred vendors are arriving 4.6 days earlier this quarter.",tone:"teal"}];
-  return <div className="p-5 lg:p-10"><PageHeader eyebrow="Thursday, June 19, 2025" title={`Good morning, ${useUser()?.name?.split(' ')[0] || 'Maya'}.`} detail="Here is the shape of your procurement decisions today." action={<Link href="/purchase-requests/new" data-testid="link-new-request-dashboard" className="rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:-translate-y-0.5"><Plus className="mr-2 inline" size={16} /> New request</Link>} /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[[metrics.activeRequests,"Active requests",Activity, "12.4% vs last month"],[metrics.pendingApprovals,"Pending approvals",ClipboardCheck,"2 need you today"],[metrics.activeOrders,"Orders in motion",Truck,"1 arrives this week"],[money(metrics.totalSpend),"Spend this quarter",BarChart3,"8.7% under plan"]].map(([v,l,I,delta],i)=><Metric key={l as string} value={typeof v === "number" ? String(v) : v as string} label={l as string} icon={I as typeof Activity} delta={delta as string} accent={i===1} />)}</div><div className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_.8fr]"><Section title="Spend pulse" detail="Committed spend · last 6 months" action={<button onClick={()=>window.print()} data-testid="button-download-spend" className="rounded-lg p-2 text-muted-foreground hover:bg-muted"><Download size={16}/></button>}><BarChart values={spend} /></Section><Section title="Decision signals" detail="What needs a closer look"><div className="divide-y divide-border">{insights.map((x: any) => <div key={x.id} className="flex gap-3 px-5 py-4"><div className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg ${x.tone === "amber" ? "bg-accent/20 text-amber-700" : "bg-primary/10 text-primary"}`}>{x.tone === "amber" ? <Zap size={15}/> : <Lightbulb size={15}/>}</div><div><p className="text-sm font-bold">{x.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{x.detail}</p></div></div>)}</div></Section></div><div className="mt-6"><Section title="Recent requests" detail="The latest movement across your workspace" action={<Link href="/purchase-requests" data-testid="link-all-requests" className="text-xs font-bold text-primary">View all <ArrowRight className="ml-1 inline" size={13}/></Link>}><RequestTable rows={requests.slice(0,4)} /></Section></div></div>;
+  const d = data as any;
+  const metrics = d?.metrics ?? { activeRequests: 12, pendingApprovals: 4, activeOrders: 8, totalSpend: 642800 };
+  const requests = d?.recentRequests ?? demoRequests;
+  const spend = d?.monthlySpend ?? [{month:"Jan",amount:52000},{month:"Feb",amount:69000},{month:"Mar",amount:61000},{month:"Apr",amount:84000},{month:"May",amount:73000},{month:"Jun",amount:98000}];
+  const insights = d?.insights ?? [{id:1,kind:"risk",title:"One request needs context",detail:"PR-1048 has a 12.8% delay risk against an August requirement.",tone:"amber"},{id:2,kind:"saving",title:"A pattern worth repeating",detail:"Preferred vendors are arriving 4.6 days earlier this quarter.",tone:"teal"}];
+
+  const dayName = now.toLocaleDateString("en-IN", { weekday: "long" });
+  const fullDate = now.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+  const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
+  const greeting = now.getHours() < 12 ? "Good morning" : now.getHours() < 17 ? "Good afternoon" : "Good evening";
+  const user = useUser();
+
+  return (
+    <div className="p-5 lg:p-10">
+      {/* Live clock hero header */}
+      <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+            <span className="font-mono text-[11px] font-bold tracking-widest text-primary">{timeStr}</span>
+            <span className="text-[11px] text-muted-foreground">·</span>
+            <span className="text-[11px] font-semibold text-muted-foreground">{dayName}, {fullDate}</span>
+          </div>
+          <h1 className="font-serif text-3xl font-bold tracking-tight text-foreground lg:text-[38px]">{greeting}, {user?.name?.split(" ")[0] || "Maya"}.</h1>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">Here is the shape of your procurement decisions today.</p>
+        </div>
+        <Link href="/purchase-requests/new" data-testid="link-new-request-dashboard" className="rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:-translate-y-0.5">
+          <Plus className="mr-2 inline" size={16} /> New request
+        </Link>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[[metrics.activeRequests,"Active requests",Activity,"12.4% vs last month"],[metrics.pendingApprovals,"Pending approvals",ClipboardCheck,"2 need you today"],[metrics.activeOrders,"Orders in motion",Truck,"1 arrives this week"],[money(metrics.totalSpend),"Spend this quarter",BarChart3,"8.7% under plan"]].map(([v,l,I,delta],i) => <Metric key={l as string} value={typeof v==="number"?String(v):v as string} label={l as string} icon={I as typeof Activity} delta={delta as string} accent={i===1}/>)}
+      </div>
+      <div className="mt-6 grid gap-6 xl:grid-cols-[1.2fr_.8fr]">
+        <Section title="Spend pulse" detail="Committed spend · last 6 months" action={<button onClick={()=>window.print()} data-testid="button-download-spend" className="rounded-lg p-2 text-muted-foreground hover:bg-muted"><Download size={16}/></button>}><BarChart values={spend}/></Section>
+        <Section title="Decision signals" detail="What needs a closer look"><div className="divide-y divide-border">{insights.map((x:any)=><div key={x.id} className="flex gap-3 px-5 py-4"><div className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg ${x.tone==="amber"?"bg-accent/20 text-amber-700":"bg-primary/10 text-primary"}`}>{x.tone==="amber"?<Zap size={15}/>:<Lightbulb size={15}/>}</div><div><p className="text-sm font-bold">{x.title}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">{x.detail}</p></div></div>)}</div></Section>
+      </div>
+      <div className="mt-6"><Section title="Recent requests" detail="The latest movement across your workspace" action={<Link href="/purchase-requests" data-testid="link-all-requests" className="text-xs font-bold text-primary">View all <ArrowRight className="ml-1 inline" size={13}/></Link>}><RequestTable rows={requests.slice(0,4)}/></Section></div>
+    </div>
+  );
 }
 
 function RequestTable({ rows }: { rows: any[] }) { const [, setLocation] = useLocation(); return <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left"><thead><tr className="border-b border-border text-[10px] uppercase tracking-[.13em] text-muted-foreground"><th className="px-5 py-3 font-bold">Request</th><th className="px-3 py-3 font-bold">Owner</th><th className="px-3 py-3 font-bold">Required by</th><th className="px-3 py-3 font-bold">Budget</th><th className="px-3 py-3 font-bold">Status</th><th className="px-5 py-3" /></tr></thead><tbody>{rows.map((r, i) => <tr key={r.id} data-testid={`row-request-${r.id}`} className={`group cursor-pointer border-b border-border/70 last:border-0 hover:bg-muted/50 aqura-rise aqura-delay-${Math.min(i+1,4)}`} onClick={() => setLocation(`/purchase-requests/${r.id}`)}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="font-mono text-[11px] text-muted-foreground">{r.requestNumber}</span><div><p className="text-sm font-semibold">{r.title}</p><p className="mt-0.5 text-[11px] text-muted-foreground">{r.department} · {r.priority} priority</p></div></div></td><td className="px-3 py-4 text-xs">{r.requester}</td><td className="px-3 py-4 font-mono text-xs">{date(r.requiredDate)}</td><td className="px-3 py-4 font-mono text-sm font-semibold">{money(r.budget)}</td><td className="px-3 py-4"><Badge tone={statusTone(r.status)}>{r.status}</Badge></td><td className="px-5 py-4 text-right text-muted-foreground"><ArrowRight size={15} className="opacity-0 transition-opacity group-hover:opacity-100" /></td></tr>)}</tbody></table></div>; }
@@ -148,7 +198,347 @@ function RequestDetail() { const {id} = useParams(); const requestId=Number(id);
 
 function Approvals() { const q=useListApprovals({query:{queryKey:getListApprovalsQueryKey()}}); const approve=useApproveRequest(); const reject=useRejectRequest(); const [done,setDone]=useState<Record<number,string>>({}); const rows:any[]=q.data??[{id:1,requestNumber:"PR-1048",title:"Q3 data center cooling upgrade",requester:"Maya Chen",amount:184500,status:"Pending",approver:"Maya Chen",level:2,createdAt:"2025-06-12"},{id:2,requestNumber:"PR-1042",title:"Customer interview platform",requester:"Sofia Lee",amount:18600,status:"Pending",approver:"Maya Chen",level:1,createdAt:"2025-06-07"}]; return <div className="p-5 lg:p-10"><PageHeader eyebrow="Keep work moving" title="Approval queue" detail="Decisions waiting for the right context, not just a rubber stamp."/><div className="mb-6 grid gap-4 sm:grid-cols-3"><Metric label="Waiting on you" value={`${rows.filter(x=>x.status.toLowerCase().includes("pending")).length}`} icon={Clock3} accent/><Metric label="Total exposure" value={money(rows.reduce((s,x)=>s+x.amount,0))} icon={ShieldCheck}/><Metric label="Median response" value="1.8 days" delta="0.4 faster" icon={Zap}/></div>{q.isLoading?<LoadingPage/>:q.isError?<ErrorState retry={q.refetch}/>:<div className="space-y-3">{rows.map((x,i)=><div key={x.id} data-testid={`card-approval-${x.id}`} className="aqura-rise rounded-xl border border-border bg-card p-5 hover:border-primary/35"><div className="flex flex-col gap-5 lg:flex-row lg:items-center"><div className="flex flex-1 items-start gap-4"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent/15 text-accent-foreground"><ClipboardCheck size={19}/></div><div><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-[11px] text-muted-foreground">{x.requestNumber}</span><Badge tone={statusTone(done[x.id]??x.status)}>{done[x.id]??x.status}</Badge></div><h3 className="mt-2 font-serif text-xl font-bold">{x.title}</h3><p className="mt-1 text-xs text-muted-foreground">Requested by {x.requester} · Level {x.level} approval · {date(x.createdAt)}</p></div></div><div className="flex items-center justify-between gap-6 lg:justify-end"><p className="font-mono text-xl font-bold">{money(x.amount)}</p>{!done[x.id]&&<div className="flex gap-2"><button onClick={()=>approve.mutate({id:x.id,data:{comment:"Approved in AQURA"}} ,{onSuccess:()=>setDone({...done,[x.id]:"Approved"})})} disabled={approve.isPending} data-testid={`button-approve-${x.id}`} className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground"><Check className="mr-1 inline" size={14}/> Approve</button><button onClick={()=>reject.mutate({id:x.id,data:{comment:"Needs more context"}} ,{onSuccess:()=>setDone({...done,[x.id]:"Rejected"})})} disabled={reject.isPending} data-testid={`button-reject-${x.id}`} className="rounded-lg border border-destructive/25 px-3 py-2 text-xs font-bold text-destructive hover:bg-destructive/10"><X size={14} className="mr-1 inline"/> Reject</button></div>}</div></div></div>)}</div>}</div>; }
 
-function Vendors() { const [search,setSearch]=useState(""); const params=useMemo(()=>({search:search||undefined,page:1}),[search]); const q=useListVendors(params,{query:{queryKey:getListVendorsQueryKey(params)}}); const createVendor=useCreateVendor(); const rows:any[]=(q.data as any)?.items??demoVendors; return <div className="p-5 lg:p-10"><PageHeader eyebrow="Your network" title="Vendors" detail="A living directory of the partners behind your purchases." action={<div className="flex gap-2"><Link href="/vendors/discover" data-testid="link-discover-vendors" className="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold"><Sparkles className="mr-2 inline text-primary" size={15}/> Discover</Link><button onClick={()=>createVendor.mutate({data:{companyName:"New partner",category:"General",location:"To be qualified"}},{onSuccess:()=>q.refetch()})} disabled={createVendor.isPending} data-testid="button-add-vendor" className="rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground"><Plus className="mr-2 inline" size={16}/> Add vendor</button></div>}/><div className="mb-6 flex gap-3"><div className="relative flex-1"><Search className="absolute left-3 top-3 text-muted-foreground" size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search vendors or categories…" data-testid="input-search-vendors" className="h-11 w-full rounded-lg border border-input bg-card pl-10 text-sm outline-none focus:border-primary"/></div></div>{q.isLoading?<LoadingPage/>:q.isError?<ErrorState retry={q.refetch}/>:<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{rows.map((v,i)=><Link href={`/vendors/${v.id}`} data-testid={`card-vendor-${v.id}`} key={v.id} className={`group rounded-xl border border-border bg-card p-5 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 aqura-rise aqura-delay-${Math.min(i+1,4)}`}><div className="flex items-start justify-between"><div className="grid h-11 w-11 place-items-center rounded-xl bg-sidebar text-sm font-bold text-primary">{initials(v.companyName)}</div><Badge tone={statusTone(v.status)}>{v.status}</Badge></div><h3 className="mt-5 font-serif text-xl font-bold">{v.companyName}</h3><p className="mt-1 text-xs text-muted-foreground">{v.category} · {v.location}</p><div className="mt-6 grid grid-cols-3 gap-2 border-t border-border pt-4"><div><p className="text-[10px] text-muted-foreground">Rating</p><p className="mt-1 font-mono text-sm font-bold">{v.rating?.toFixed(1)}</p></div><div><p className="text-[10px] text-muted-foreground">Performance</p><p className="mt-1 font-mono text-sm font-bold text-primary">{v.performance}%</p></div><div><p className="text-[10px] text-muted-foreground">Reliability</p><p className="mt-1 font-mono text-sm font-bold">{v.reliability}%</p></div></div><p className="mt-4 text-xs font-bold text-primary opacity-0 transition-opacity group-hover:opacity-100">View profile <ArrowRight className="ml-1 inline" size={13}/></p></Link>)}</div>}</div>; }
+// ── Vendor onboarding modal ──────────────────────────────────────────────────
+type VendorStep = "basic" | "auth" | "banking" | "docs" | "review";
+
+const VENDOR_STEPS: { id: VendorStep; label: string; icon: typeof Building2 }[] = [
+  { id: "basic",   label: "Company info",    icon: Building2 },
+  { id: "auth",    label: "KYC & identity",  icon: ShieldCheck },
+  { id: "banking", label: "Bank details",    icon: PackageCheck },
+  { id: "docs",    label: "Documents",       icon: ClipboardCheck },
+  { id: "review",  label: "Review & submit", icon: CheckCircle2 },
+];
+
+function VendorStepBar({ current }: { current: VendorStep }) {
+  const idx = VENDOR_STEPS.findIndex(s => s.id === current);
+  return (
+    <div className="flex items-center gap-0">
+      {VENDOR_STEPS.map((s, i) => {
+        const done = i < idx; const active = i === idx;
+        return (
+          <div key={s.id} className="flex flex-1 items-center">
+            <div className={`flex flex-col items-center gap-1.5 ${i !== 0 ? "flex-1" : ""}`}>
+              {i !== 0 && <div className={`mb-[-12px] h-0.5 w-full ${done ? "bg-primary" : "bg-border"}`} />}
+              <div className={`relative z-10 grid h-8 w-8 place-items-center rounded-full text-[11px] font-bold border-2 transition-colors ${active ? "border-primary bg-primary text-primary-foreground" : done ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground"}`}>
+                {done ? <Check size={14}/> : i + 1}
+              </div>
+              <span className={`hidden text-[10px] font-semibold sm:block ${active ? "text-primary" : done ? "text-primary/70" : "text-muted-foreground"}`}>{s.label}</span>
+            </div>
+            {i < VENDOR_STEPS.length - 1 && <div className={`h-0.5 flex-1 ${done ? "bg-primary" : "bg-border"}`}/>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const EMPTY_VENDOR_FORM = {
+  // Step 1 – basic
+  companyName: "", category: "IT Hardware", location: "", contactPerson: "", email: "", phone: "", website: "", businessType: "Private Limited",
+  // Step 2 – KYC / auth
+  gstNumber: "", panNumber: "", aadharNumber: "", cinNumber: "", msmeNumber: "", tradeLicense: "",
+  // Step 3 – banking
+  bankName: "", accountNumber: "", ifscCode: "", accountHolderName: "", bankBranch: "",
+  // Step 4 – docs (just acknowledgements)
+  agreeTNC: false, agreePrivacy: false, agreeVerification: false,
+};
+type VendorForm = typeof EMPTY_VENDOR_FORM;
+
+function VendorModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+  const [step, setStep] = useState<VendorStep>("basic");
+  const [form, setForm] = useState<VendorForm>(EMPTY_VENDOR_FORM);
+  const [errors, setErrors] = useState<Partial<Record<keyof VendorForm | string, string>>>({});
+  const [submitted, setSubmitted] = useState(false);
+  const createVendor = useCreateVendor();
+
+  const upd = (k: keyof VendorForm, v: string | boolean) => {
+    setForm(f => ({ ...f, [k]: v }));
+    setErrors(e => { const n = { ...e }; delete n[k]; return n; });
+  };
+
+  const validateGST = (v: string) => /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(v.toUpperCase());
+  const validatePAN = (v: string) => /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v.toUpperCase());
+  const validateAadhar = (v: string) => /^[0-9]{12}$/.test(v.replace(/\s/g, ""));
+  const validateIFSC = (v: string) => /^[A-Z]{4}0[A-Z0-9]{6}$/.test(v.toUpperCase());
+
+  const validateStep = (): boolean => {
+    const e: typeof errors = {};
+    if (step === "basic") {
+      if (!form.companyName.trim()) e.companyName = "Company name is required";
+      if (!form.location.trim()) e.location = "Location is required";
+      if (!form.contactPerson.trim()) e.contactPerson = "Contact person is required";
+      if (!form.email.trim() || !/\S+@\S+\.\S+/.test(form.email)) e.email = "Valid email is required";
+      if (!form.phone.trim() || !/^[0-9]{10}$/.test(form.phone)) e.phone = "Valid 10-digit phone required";
+    }
+    if (step === "auth") {
+      if (!form.gstNumber.trim()) e.gstNumber = "GST number is required";
+      else if (!validateGST(form.gstNumber)) e.gstNumber = "Invalid GST format (e.g. 22AAAAA0000A1Z5)";
+      if (!form.panNumber.trim()) e.panNumber = "PAN is required";
+      else if (!validatePAN(form.panNumber)) e.panNumber = "Invalid PAN (e.g. ABCDE1234F)";
+      if (!form.aadharNumber.trim()) e.aadharNumber = "Aadhaar number is required";
+      else if (!validateAadhar(form.aadharNumber)) e.aadharNumber = "Aadhaar must be 12 digits";
+    }
+    if (step === "banking") {
+      if (!form.bankName.trim()) e.bankName = "Bank name is required";
+      if (!form.accountHolderName.trim()) e.accountHolderName = "Account holder name is required";
+      if (!form.accountNumber.trim() || form.accountNumber.length < 9) e.accountNumber = "Valid account number required";
+      if (!form.ifscCode.trim()) e.ifscCode = "IFSC code is required";
+      else if (!validateIFSC(form.ifscCode)) e.ifscCode = "Invalid IFSC (e.g. SBIN0001234)";
+    }
+    if (step === "docs") {
+      if (!form.agreeTNC) e.agreeTNC = "You must accept terms";
+      if (!form.agreePrivacy) e.agreePrivacy = "You must accept privacy policy";
+      if (!form.agreeVerification) e.agreeVerification = "You must consent to KYC verification";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const next = () => {
+    if (!validateStep()) return;
+    const order: VendorStep[] = ["basic","auth","banking","docs","review"];
+    const idx = order.indexOf(step);
+    if (idx < order.length - 1) setStep(order[idx + 1]);
+  };
+  const prev = () => {
+    const order: VendorStep[] = ["basic","auth","banking","docs","review"];
+    const idx = order.indexOf(step);
+    if (idx > 0) setStep(order[idx - 1]);
+  };
+
+  const submit = () => {
+    createVendor.mutate(
+      { data: { companyName: form.companyName, category: form.category, location: form.location, contactPerson: form.contactPerson, email: form.email } },
+      { onSuccess: () => { setSubmitted(true); setTimeout(() => { onSuccess(); onClose(); }, 2000); } }
+    );
+  };
+
+  const F = ({ label, id, placeholder, value, onChange, error, type = "text", hint, required = true, maxLength }: { label: string; id: keyof VendorForm; placeholder?: string; value: string; onChange: (v: string) => void; error?: string; type?: string; hint?: string; required?: boolean; maxLength?: number }) => (
+    <div>
+      <label className="mb-1.5 flex items-center gap-1 text-xs font-bold text-foreground">
+        {label}{required && <span className="text-destructive">*</span>}
+      </label>
+      <input type={type} id={String(id)} data-testid={`input-vendor-${String(id)}`} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} maxLength={maxLength}
+        className={`h-11 w-full rounded-lg border px-3 text-sm outline-none transition-colors ${error ? "border-destructive bg-destructive/5 focus:border-destructive" : "border-input bg-card focus:border-primary focus:ring-2 focus:ring-primary/10"}`}/>
+      {hint && !error && <p className="mt-1 text-[11px] text-muted-foreground">{hint}</p>}
+      {error && <p className="mt-1 flex items-center gap-1 text-[11px] text-destructive"><XCircle size={11}/>{error}</p>}
+    </div>
+  );
+
+  if (submitted) return (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="grid h-16 w-16 place-items-center rounded-full bg-primary/10 text-primary"><CheckCircle2 size={28}/></div>
+      <h3 className="mt-5 font-serif text-2xl font-bold">Vendor onboarded!</h3>
+      <p className="mt-2 text-sm text-muted-foreground">KYC verification has been initiated. The vendor will appear in your directory shortly.</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <VendorStepBar current={step}/>
+
+      {/* STEP 1 – Basic info */}
+      {step === "basic" && (
+        <div className="space-y-4">
+          <div className="mb-2"><p className="text-[11px] font-bold uppercase tracking-[.15em] text-primary">Company information</p><h3 className="mt-1 font-serif text-xl font-bold">Tell us about the vendor</h3></div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2"><F label="Company / Legal name" id="companyName" placeholder="e.g. Apex Systems Pvt. Ltd." value={form.companyName} onChange={v => upd("companyName", v)} error={errors.companyName}/></div>
+            <div>
+              <label className="mb-1.5 block text-xs font-bold">Business type<span className="text-destructive">*</span></label>
+              <select value={form.businessType} onChange={e => upd("businessType", e.target.value)} data-testid="select-vendor-businessType" className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm outline-none focus:border-primary">
+                {["Private Limited","Public Limited","LLP","Proprietorship","Partnership","Trust","NGO","Government"].map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-bold">Category<span className="text-destructive">*</span></label>
+              <select value={form.category} onChange={e => upd("category", e.target.value)} data-testid="select-vendor-category" className="h-11 w-full rounded-lg border border-input bg-card px-3 text-sm outline-none focus:border-primary">
+                {["IT Hardware","Cloud Services","Office Supplies","Industrial Supplies","Logistics","Consulting","Software","Facilities","Raw Materials","Other"].map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <F label="Headquarters location" id="location" placeholder="e.g. Bengaluru, Karnataka" value={form.location} onChange={v => upd("location", v)} error={errors.location}/>
+            <F label="Website" id="website" placeholder="https://vendor.com" value={form.website} onChange={v => upd("website", v)} required={false}/>
+            <F label="Primary contact person" id="contactPerson" placeholder="Full name" value={form.contactPerson} onChange={v => upd("contactPerson", v)} error={errors.contactPerson}/>
+            <F label="Business email" id="email" type="email" placeholder="contact@company.com" value={form.email} onChange={v => upd("email", v)} error={errors.email}/>
+            <F label="Phone number" id="phone" type="tel" placeholder="10-digit mobile" value={form.phone} onChange={v => upd("phone", v.replace(/\D/g,""))} error={errors.phone} maxLength={10}/>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 2 – KYC / Auth */}
+      {step === "auth" && (
+        <div className="space-y-4">
+          <div className="mb-2"><p className="text-[11px] font-bold uppercase tracking-[.15em] text-primary">KYC & identity</p><h3 className="mt-1 font-serif text-xl font-bold">Vendor authentication</h3><p className="mt-1 text-xs text-muted-foreground">All credentials are encrypted and verified against government databases before onboarding is complete.</p></div>
+          <div className="rounded-xl border border-primary/20 bg-primary/[.04] p-4">
+            <div className="flex gap-3"><ShieldCheck size={18} className="mt-0.5 shrink-0 text-primary"/><p className="text-xs leading-5 text-muted-foreground">Your KYC data is stored end-to-end encrypted and processed solely for vendor authentication. It will never be shared without your consent.</p></div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <F label="GST Registration Number" id="gstNumber" placeholder="22AAAAA0000A1Z5" value={form.gstNumber} onChange={v => upd("gstNumber", v.toUpperCase())} error={errors.gstNumber}
+                hint="15-character alphanumeric GST number issued by GSTN" maxLength={15}/>
+            </div>
+            <F label="PAN Number" id="panNumber" placeholder="ABCDE1234F" value={form.panNumber} onChange={v => upd("panNumber", v.toUpperCase())} error={errors.panNumber} hint="10-character PAN issued by Income Tax department" maxLength={10}/>
+            <F label="Aadhaar Number (Proprietor / Director)" id="aadharNumber" placeholder="XXXX XXXX XXXX" value={form.aadharNumber} onChange={v => upd("aadharNumber", v.replace(/\D/g,""))} error={errors.aadharNumber} hint="12-digit UID issued by UIDAI" maxLength={12}/>
+            <F label="CIN (Company Identification Number)" id="cinNumber" placeholder="U12345MH2000PTC123456" value={form.cinNumber} onChange={v => upd("cinNumber", v.toUpperCase())} error={errors.cinNumber} required={false} hint="Required for Pvt. Ltd. / Ltd. companies" maxLength={21}/>
+            <F label="MSME / Udyam Registration No." id="msmeNumber" placeholder="UDYAM-XX-00-0000000" value={form.msmeNumber} onChange={v => upd("msmeNumber", v.toUpperCase())} error={errors.msmeNumber} required={false} hint="If registered under MSME Act"/>
+            <div className="sm:col-span-2"><F label="Trade / Shop License Number" id="tradeLicense" placeholder="e.g. TL-MH-2024-00123" value={form.tradeLicense} onChange={v => upd("tradeLicense", v)} error={errors.tradeLicense} required={false} hint="Municipal trade license or shop act license number"/></div>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 3 – Banking */}
+      {step === "banking" && (
+        <div className="space-y-4">
+          <div className="mb-2"><p className="text-[11px] font-bold uppercase tracking-[.15em] text-primary">Bank details</p><h3 className="mt-1 font-serif text-xl font-bold">Payment account information</h3><p className="mt-1 text-xs text-muted-foreground">Used only for purchase order payment processing. Verified via penny drop before first payment.</p></div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <F label="Account holder name" id="accountHolderName" placeholder="As per bank records" value={form.accountHolderName} onChange={v => upd("accountHolderName", v)} error={errors.accountHolderName}/>
+            <F label="Bank name" id="bankName" placeholder="e.g. State Bank of India" value={form.bankName} onChange={v => upd("bankName", v)} error={errors.bankName}/>
+            <F label="Account number" id="accountNumber" placeholder="Enter account number" value={form.accountNumber} onChange={v => upd("accountNumber", v.replace(/\D/g,""))} error={errors.accountNumber} maxLength={18}/>
+            <F label="IFSC code" id="ifscCode" placeholder="SBIN0001234" value={form.ifscCode} onChange={v => upd("ifscCode", v.toUpperCase())} error={errors.ifscCode} hint="11-character IFSC (Branch Code)" maxLength={11}/>
+            <div className="sm:col-span-2"><F label="Bank branch" id="bankBranch" placeholder="Branch name and city" value={form.bankBranch} onChange={v => upd("bankBranch", v)} error={errors.bankBranch} required={false}/></div>
+          </div>
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+            <div className="flex gap-3"><Info size={16} className="mt-0.5 shrink-0 text-amber-600"/><p className="text-xs leading-5 text-amber-700">A ₹1 penny-drop verification will be initiated on the provided account before the first payment is released. Ensure details are accurate to avoid delays.</p></div>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 4 – Documents & consent */}
+      {step === "docs" && (
+        <div className="space-y-4">
+          <div className="mb-2"><p className="text-[11px] font-bold uppercase tracking-[.15em] text-primary">Documents & consent</p><h3 className="mt-1 font-serif text-xl font-bold">Declarations & compliance</h3></div>
+          <div className="space-y-3 rounded-xl border border-border bg-card p-5">
+            {[
+              { key: "agreeTNC" as keyof VendorForm,          label: "Terms & Conditions",   body: "I confirm that all information provided is accurate and that I accept the Vendor Terms and Conditions governing this partnership." },
+              { key: "agreePrivacy" as keyof VendorForm,      label: "Privacy Policy",        body: "I acknowledge that my KYC data will be processed as per AQURA's Privacy Policy and applicable data protection laws." },
+              { key: "agreeVerification" as keyof VendorForm, label: "KYC Verification consent", body: "I authorise AQURA to verify the submitted credentials (GST, PAN, Aadhaar, Bank) against government and financial databases for onboarding." },
+            ].map(({ key, label, body }) => (
+              <label key={key} className={`flex cursor-pointer gap-4 rounded-xl border p-4 transition-colors ${form[key] ? "border-primary/30 bg-primary/[.04]" : errors[key] ? "border-destructive/30 bg-destructive/[.03]" : "border-border hover:bg-muted/40"}`}>
+                <input type="checkbox" checked={form[key] as boolean} onChange={e => upd(key, e.target.checked)} data-testid={`checkbox-vendor-${key}`}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"/>
+                <div>
+                  <p className="text-sm font-semibold">{label}</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">{body}</p>
+                  {errors[key] && <p className="mt-1 flex items-center gap-1 text-[11px] text-destructive"><XCircle size={11}/>{errors[key]}</p>}
+                </div>
+              </label>
+            ))}
+          </div>
+          <div className="rounded-xl border border-border bg-muted/40 p-4 text-xs leading-6 text-muted-foreground">
+            <strong className="text-foreground">Document upload</strong> — After submission you will receive an email with a secure link to upload supporting documents: GST certificate, PAN card copy, Cancelled cheque, and Certificate of Incorporation. These are required to complete full KYC.
+          </div>
+        </div>
+      )}
+
+      {/* STEP 5 – Review */}
+      {step === "review" && (
+        <div className="space-y-4">
+          <div className="mb-2"><p className="text-[11px] font-bold uppercase tracking-[.15em] text-primary">Review & submit</p><h3 className="mt-1 font-serif text-xl font-bold">Confirm vendor details</h3></div>
+          {[
+            { title: "Company info", rows: [["Legal name", form.companyName], ["Type", form.businessType], ["Category", form.category], ["Location", form.location], ["Contact", form.contactPerson], ["Email", form.email], ["Phone", form.phone]] },
+            { title: "KYC & identity", rows: [["GST", form.gstNumber], ["PAN", form.panNumber], ["Aadhaar", "●●●● ●●●● " + form.aadharNumber.slice(-4)], ["CIN", form.cinNumber || "—"], ["MSME", form.msmeNumber || "—"]] },
+            { title: "Banking", rows: [["Bank", form.bankName], ["Account holder", form.accountHolderName], ["Account No.", "●●●●●●●" + form.accountNumber.slice(-4)], ["IFSC", form.ifscCode], ["Branch", form.bankBranch || "—"]] },
+          ].map(section => (
+            <div key={section.title} className="rounded-xl border border-border bg-card overflow-hidden">
+              <div className="border-b border-border bg-muted/40 px-5 py-3"><p className="text-xs font-bold uppercase tracking-[.12em] text-muted-foreground">{section.title}</p></div>
+              <div className="divide-y divide-border">
+                {section.rows.map(([l, v]) => <div key={l} className="flex items-center justify-between px-5 py-3 text-sm"><span className="text-muted-foreground">{l}</span><span className="font-semibold">{v}</span></div>)}
+              </div>
+            </div>
+          ))}
+          <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/[.04] p-4">
+            <ShieldCheck size={18} className="shrink-0 text-primary"/>
+            <p className="text-xs leading-5 text-muted-foreground">By submitting, AQURA will initiate KYC verification. The vendor status will be set to <strong>Pending verification</strong> until all checks clear (typically 1–2 business days).</p>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation */}
+      <div className="flex items-center justify-between border-t border-border pt-4">
+        <button onClick={step === "basic" ? onClose : prev} data-testid="button-vendor-prev" className="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold hover:bg-muted">
+          {step === "basic" ? "Cancel" : <><ChevronLeft size={15} className="mr-1 inline"/>Back</>}
+        </button>
+        {step !== "review" ? (
+          <button onClick={next} data-testid="button-vendor-next" className="rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground hover:-translate-y-0.5">
+            Continue <ArrowRight size={15} className="ml-1 inline"/>
+          </button>
+        ) : (
+          <button onClick={submit} disabled={createVendor.isPending} data-testid="button-vendor-submit" className="rounded-lg bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground disabled:opacity-60">
+            {createVendor.isPending ? <><Loader2 size={15} className="mr-2 inline animate-spin"/>Submitting…</> : <><CheckCircle2 size={15} className="mr-2 inline"/>Submit vendor</>}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Vendors() {
+  const [search, setSearch] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const params = useMemo(() => ({ search: search || undefined, page: 1 }), [search]);
+  const q = useListVendors(params, { query: { queryKey: getListVendorsQueryKey(params) } });
+  const rows: any[] = (q.data as any)?.items ?? demoVendors;
+
+  return (
+    <div className="p-5 lg:p-10">
+      <PageHeader eyebrow="Your network" title="Vendors" detail="A living directory of the partners behind your purchases." action={
+        <div className="flex gap-2">
+          <Link href="/vendors/discover" data-testid="link-discover-vendors" className="rounded-lg border border-border px-4 py-2.5 text-sm font-semibold">
+            <Sparkles className="mr-2 inline text-primary" size={15}/> Discover
+          </Link>
+          <button onClick={() => setShowModal(true)} data-testid="button-add-vendor" className="rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:-translate-y-0.5">
+            <Plus className="mr-2 inline" size={16}/> Add vendor
+          </button>
+        </div>
+      }/>
+
+      {/* Modal overlay */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/30 p-4 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}>
+          <div className="my-8 w-full max-w-2xl rounded-2xl border border-border bg-background shadow-2xl shadow-foreground/20">
+            <div className="flex items-center justify-between border-b border-border px-6 py-5">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[.16em] text-primary">Vendor onboarding</p>
+                <h2 className="mt-1 font-serif text-2xl font-bold">Add a new vendor</h2>
+              </div>
+              <button onClick={() => setShowModal(false)} data-testid="button-close-vendor-modal" className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"><X size={18}/></button>
+            </div>
+            <div className="p-6">
+              <VendorModal onClose={() => setShowModal(false)} onSuccess={() => q.refetch()}/>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mb-6 flex gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-3 text-muted-foreground" size={17}/>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search vendors or categories…" data-testid="input-search-vendors" className="h-11 w-full rounded-lg border border-input bg-card pl-10 text-sm outline-none focus:border-primary"/>
+        </div>
+      </div>
+
+      {q.isLoading ? <LoadingPage/> : q.isError ? <ErrorState retry={q.refetch}/> : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {rows.map((v, i) => (
+            <Link href={`/vendors/${v.id}`} data-testid={`card-vendor-${v.id}`} key={v.id} className={`group rounded-xl border border-border bg-card p-5 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 aqura-rise aqura-delay-${Math.min(i+1,4)}`}>
+              <div className="flex items-start justify-between">
+                <div className="grid h-11 w-11 place-items-center rounded-xl bg-sidebar text-sm font-bold text-primary">{initials(v.companyName)}</div>
+                <Badge tone={statusTone(v.status)}>{v.status}</Badge>
+              </div>
+              <h3 className="mt-5 font-serif text-xl font-bold">{v.companyName}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">{v.category} · {v.location}</p>
+              <div className="mt-6 grid grid-cols-3 gap-2 border-t border-border pt-4">
+                <div><p className="text-[10px] text-muted-foreground">Rating</p><p className="mt-1 font-mono text-sm font-bold">{v.rating?.toFixed(1)}</p></div>
+                <div><p className="text-[10px] text-muted-foreground">Performance</p><p className="mt-1 font-mono text-sm font-bold text-primary">{v.performance}%</p></div>
+                <div><p className="text-[10px] text-muted-foreground">Reliability</p><p className="mt-1 font-mono text-sm font-bold">{v.reliability}%</p></div>
+              </div>
+              <p className="mt-4 text-xs font-bold text-primary opacity-0 transition-opacity group-hover:opacity-100">View profile <ArrowRight className="ml-1 inline" size={13}/></p>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function VendorDetail() { const {id}=useParams(); const vendorId=Number(id); const q=useGetVendor(vendorId,{query:{enabled:!!vendorId,queryKey:getGetVendorQueryKey(vendorId)}}); if(q.isLoading)return <LoadingPage/>; if(q.isError)return <ErrorState retry={q.refetch}/>; const v:any=q.data??{...demoVendors[0],address:"411 Congress Ave, Austin, TX",website:"northstarsystems.com",totalOrders:42,metrics:[{label:"On-time delivery",value:94,change:4.2},{label:"Quality accuracy",value:97,change:2.1},{label:"Cost competitiveness",value:88,change:-1.3}]}; return <div className="p-5 lg:p-10"><Link href="/vendors" data-testid="link-back-vendors" className="mb-6 inline-flex items-center gap-1 text-xs font-bold text-muted-foreground"><ChevronLeft size={14}/> Vendors</Link><PageHeader eyebrow="Vendor profile" title={v.companyName} detail={`${v.category} · ${v.location}`} action={<Badge tone={statusTone(v.status)}>{v.status}</Badge>}/><div className="grid gap-6 xl:grid-cols-[.7fr_1.3fr]"><Section title="Partner overview"><div className="p-5"><div className="flex items-center gap-4"><div className="grid h-16 w-16 place-items-center rounded-2xl bg-sidebar font-serif text-xl font-bold text-primary">{initials(v.companyName)}</div><div><p className="font-serif text-xl font-bold">{v.companyName}</p><p className="mt-1 text-xs text-muted-foreground">{v.address??v.location}</p></div></div><div className="mt-6 space-y-3 text-sm">{[["Contact",v.contactPerson??"Vendor desk"],["Email",v.email??"partnerships@vendor.com"],["Website",v.website??"—"],["Orders with AQURA",v.totalOrders??31]].map(([l,val])=><div key={l} className="flex justify-between border-b border-border pb-3"><span className="text-muted-foreground">{l}</span><span className="font-medium">{val}</span></div>)}</div></div></Section><Section title="Performance signals" detail="Compared with your vendor network"><div className="grid gap-3 p-5 sm:grid-cols-3">{(v.metrics??[]).map((m:any)=><div key={m.label} className="rounded-xl bg-muted/60 p-4"><p className="text-xs text-muted-foreground">{m.label}</p><p className="mt-3 font-mono text-2xl font-bold">{m.value}%</p><p className={`mt-1 text-xs ${m.change>=0?"text-primary":"text-destructive"}`}>{m.change>=0?"+":""}{m.change}% vs prior quarter</p></div>)}</div><div className="mx-5 mb-5 rounded-xl border border-primary/15 bg-primary/[.05] p-4"><div className="flex gap-3"><ShieldCheck size={19} className="mt-0.5 text-primary"/><div><p className="text-sm font-bold">AQURA confidence signal</p><p className="mt-1 text-xs leading-5 text-muted-foreground">This partner has a consistent delivery pattern across infrastructure orders.</p></div></div></div></Section></div></div>; }
 
@@ -160,7 +550,207 @@ function PurchaseOrders() { const q=useListPurchaseOrders({query:{queryKey:getLi
 
 function OrderDetail() { const {id}=useParams(); const orderId=Number(id); const q=useGetPurchaseOrder(orderId,{query:{enabled:!!orderId,queryKey:getGetPurchaseOrderQueryKey(orderId)}}); if(q.isLoading)return <LoadingPage/>; if(q.isError)return <ErrorState retry={q.refetch}/>; const o:any=q.data??{poNumber:"PO-2084",vendor:"Northstar Systems",requestNumber:"PR-1048",amount:184500,expectedDelivery:"2025-08-18",status:"In transit",subtotal:184500,tax:0,riskLevel:"Low",items:[{id:1,itemName:"Cooling unit",quantity:4,unitPrice:28000,total:112000}],timeline:[]}; return <div className="p-5 lg:p-10"><Link href="/purchase-orders" data-testid="link-back-orders" className="mb-6 inline-flex items-center gap-1 text-xs font-bold text-muted-foreground"><ChevronLeft size={14}/> Purchase orders</Link><PageHeader eyebrow={o.poNumber} title={o.vendor} detail={`Linked to ${o.requestNumber}`} action={<Badge tone={statusTone(o.status)}>{o.status}</Badge>}/><div className="grid gap-6 lg:grid-cols-[1fr_.75fr]"><Section title="Order summary"><div className="grid gap-4 p-5 sm:grid-cols-3">{[["Total",money(o.amount)],["Expected delivery",date(o.expectedDelivery)],["Risk posture",o.riskLevel]].map(([l,v])=><div key={l} className="rounded-xl bg-muted/60 p-4"><p className="text-xs text-muted-foreground">{l}</p><p className="mt-2 font-mono text-lg font-bold">{v}</p></div>)}</div><div className="divide-y divide-border">{o.items.map((x:any)=><div key={x.id} className="flex justify-between px-5 py-4 text-sm"><span>{x.itemName} <span className="text-muted-foreground">× {x.quantity}</span></span><span className="font-mono font-bold">{money(x.total)}</span></div>)}</div></Section><Section title="Order timeline"><div className="space-y-6 p-5">{(o.timeline?.length?o.timeline:[{id:1,action:"Purchase order created",actor:"AQURA system",timestamp:o.createdAt},{id:2,action:"Vendor confirmed delivery window",actor:o.vendor,timestamp:"2025-06-15"}]).map((x:any)=><div key={x.id} className="flex gap-3"><div className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-primary"><Check size={14}/></div><div><p className="text-sm font-semibold">{x.action}</p><p className="mt-1 text-xs text-muted-foreground">{x.actor} · {date(x.timestamp)}</p></div></div>)}</div></Section></div></div>; }
 
-function Tracking() { const q=useGetOrderTracking({query:{queryKey:getGetOrderTrackingQueryKey()}}); const rows:any[]=q.data??[{id:1,poNumber:"PO-2084",vendor:"Northstar Systems",status:"In transit",expectedDelivery:"2025-08-18",lastUpdate:"2025-06-17",delayRisk:"Low"},{id:2,poNumber:"PO-2081",vendor:"Axiom Industrial",status:"At risk",expectedDelivery:"2025-06-28",lastUpdate:"2025-06-17",delayRisk:"High"}]; return <div className="p-5 lg:p-10"><PageHeader eyebrow="Live movement" title="Order tracking" detail="Know which deliveries deserve attention before they miss the window."/><div className="grid gap-4 sm:grid-cols-3"><Metric label="In motion" value={`${rows.length}`} icon={Truck} accent/><Metric label="On track" value={`${rows.filter(r=>r.delayRisk.toLowerCase()==="low").length}`} icon={CheckCircle2}/><Metric label="Needs attention" value={`${rows.filter(r=>r.delayRisk.toLowerCase()!=="low").length}`} icon={Zap}/></div><div className="mt-6 space-y-3">{rows.map((r:any)=><div key={r.id} data-testid={`card-tracking-${r.id}`} className="rounded-xl border border-border bg-card p-5"><div className="flex flex-col gap-5 md:flex-row md:items-center"><div className="flex flex-1 items-center gap-4"><div className={`grid h-10 w-10 place-items-center rounded-xl ${r.delayRisk.toLowerCase()==="low"?"bg-primary/10 text-primary":"bg-accent/20 text-accent-foreground"}`}><Truck size={19}/></div><div><p className="font-mono text-xs font-bold">{r.poNumber}</p><p className="mt-1 text-sm font-semibold">{r.vendor}</p></div></div><div className="grid grid-cols-2 gap-8 sm:grid-cols-3"><div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Status</p><p className="mt-1 text-sm font-semibold">{r.status}</p></div><div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Expected</p><p className="mt-1 font-mono text-sm font-semibold">{date(r.expectedDelivery)}</p></div><div><p className="text-[10px] uppercase tracking-wider text-muted-foreground">Delay risk</p><p className="mt-1"><Badge tone={statusTone(r.delayRisk)}>{r.delayRisk}</Badge></p></div></div></div></div>)}</div></div>; }
+// ── Shipment tracking pipeline ───────────────────────────────────────────────
+const SHIPMENT_STAGES = [
+  { id: "placed",       label: "Order Placed",      icon: ClipboardCheck,  color: "text-primary",       bg: "bg-primary" },
+  { id: "processing",   label: "Processing",         icon: Settings2,       color: "text-chart-3",       bg: "bg-chart-3" },
+  { id: "packed",       label: "Packed",             icon: PackageCheck,    color: "text-amber-500",     bg: "bg-amber-500" },
+  { id: "shipped",      label: "Shipped",            icon: Truck,           color: "text-blue-500",      bg: "bg-blue-500" },
+  { id: "out_delivery", label: "Out for Delivery",   icon: Zap,             color: "text-orange-500",    bg: "bg-orange-500" },
+  { id: "delivered",    label: "Delivered",          icon: CheckCircle2,    color: "text-emerald-500",   bg: "bg-emerald-500" },
+];
+
+function stageIndex(status: string): number {
+  const s = status.toLowerCase();
+  if (s.includes("deliver") && !s.includes("out")) return 5;
+  if (s.includes("out") || s.includes("dispatch")) return 4;
+  if (s.includes("ship") || s.includes("transit")) return 3;
+  if (s.includes("pack")) return 2;
+  if (s.includes("process") || s.includes("confirm")) return 1;
+  return 0;
+}
+
+function ShipmentPipeline({ status, delayRisk }: { status: string; delayRisk: string }) {
+  const active = stageIndex(status);
+  const isDelayed = delayRisk.toLowerCase() !== "low";
+  return (
+    <div className="relative mt-5 px-1">
+      {/* connector line */}
+      <div className="absolute left-4 right-4 top-4 h-0.5 bg-border" />
+      <div
+        className={`absolute left-4 top-4 h-0.5 transition-all duration-700 ${isDelayed ? "bg-amber-400" : "bg-primary"}`}
+        style={{ width: `calc(${(active / (SHIPMENT_STAGES.length - 1)) * 100}% - 0px)` }}
+      />
+      <div className="relative flex justify-between">
+        {SHIPMENT_STAGES.map((stage, i) => {
+          const done = i < active;
+          const curr = i === active;
+          const Icon = stage.icon;
+          return (
+            <div key={stage.id} className="flex flex-col items-center gap-2">
+              <div
+                className={`relative grid h-8 w-8 place-items-center rounded-full border-2 transition-all duration-500
+                  ${done ? `${stage.bg} border-transparent text-white shadow-md`
+                    : curr ? `border-current ${isDelayed ? "border-amber-400 bg-amber-50 text-amber-500" : `${stage.color} bg-background`} shadow-lg`
+                    : "border-border bg-card text-muted-foreground/40"}`}
+              >
+                {curr && (
+                  <span className={`absolute -inset-1.5 rounded-full opacity-30 animate-ping ${isDelayed ? "bg-amber-400" : stage.bg}`} />
+                )}
+                <Icon size={13} strokeWidth={curr || done ? 2.2 : 1.5} />
+              </div>
+              <span className={`hidden text-center text-[9px] font-bold leading-tight sm:block w-14 ${
+                done ? "text-muted-foreground" : curr ? (isDelayed ? "text-amber-600" : stage.color) : "text-muted-foreground/50"
+              }`}>{stage.label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const DEMO_TRACKING = [
+  { id: 1, poNumber: "PO-2088", vendor: "Vertex Cloud Services",   item: "Datadog APM license",         status: "Processing",     expectedDelivery: "2026-09-30", lastUpdate: "2026-08-22T10:00:00", delayRisk: "Low",    location: "Vendor warehouse · Mumbai",      carrier: "BlueDart",   trackingId: "BD2088123456IN" },
+  { id: 2, poNumber: "PO-2087", vendor: "Apex Systems",            item: "48-port managed switch ×8",   status: "Shipped",        expectedDelivery: "2026-09-10", lastUpdate: "2026-08-21T14:30:00", delayRisk: "Low",    location: "In transit · Pune sorting hub",  carrier: "DTDC",       trackingId: "DTDC20871230IN" },
+  { id: 3, poNumber: "PO-2085", vendor: "Sierra Industrial",       item: "Industrial valves ×20",       status: "Out for Delivery",expectedDelivery: "2026-08-22", lastUpdate: "2026-08-22T08:15:00", delayRisk: "High",   location: "Out for delivery · Bengaluru",   carrier: "Delhivery",  trackingId: "DLV20851290IN" },
+  { id: 4, poNumber: "PO-2082", vendor: "Orbit Office Solutions",  item: "Ergonomic chairs ×40",        status: "Delivered",      expectedDelivery: "2026-08-20", lastUpdate: "2026-08-20T15:45:00", delayRisk: "Low",    location: "Delivered · Hinjewadi, Pune",    carrier: "Ekart",      trackingId: "EK20821155IN" },
+];
+
+function Tracking() {
+  const q = useGetOrderTracking({ query: { queryKey: getGetOrderTrackingQueryKey() } });
+  const rows: any[] = q.data ?? DEMO_TRACKING;
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const now = useLiveClock();
+
+  return (
+    <div className="p-5 lg:p-10">
+      <PageHeader eyebrow="Live movement" title="Order tracking" detail="Know which deliveries deserve attention before they miss the window." action={
+        <div className="flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+          <span className="font-mono text-[11px] font-bold text-primary">{now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}</span>
+        </div>
+      }/>
+
+      <div className="grid gap-4 sm:grid-cols-4">
+        <Metric label="Shipments tracked" value={`${rows.length}`} icon={Truck} accent/>
+        <Metric label="On time" value={`${rows.filter(r => r.delayRisk.toLowerCase()==="low").length}`} icon={CheckCircle2}/>
+        <Metric label="At risk" value={`${rows.filter(r => r.delayRisk.toLowerCase()!=="low").length}`} icon={Zap}/>
+        <Metric label="Delivered" value={`${rows.filter(r => r.status.toLowerCase()==="delivered").length}`} icon={PackageCheck}/>
+      </div>
+
+      <div className="mt-8 space-y-4">
+        {rows.map((r: any) => {
+          const isOpen = expanded === r.id;
+          const isDelayed = r.delayRisk.toLowerCase() !== "low";
+          const isDelivered = r.status.toLowerCase() === "delivered";
+          return (
+            <div key={r.id} data-testid={`card-tracking-${r.id}`}
+              className={`rounded-2xl border bg-card transition-all duration-300 ${
+                isDelivered ? "border-emerald-500/30 bg-emerald-500/[.02]" :
+                isDelayed   ? "border-amber-500/40 bg-amber-500/[.03]" :
+                "border-border hover:border-primary/30"
+              }`}>
+
+              {/* Header row */}
+              <button onClick={() => setExpanded(isOpen ? null : r.id)}
+                className="w-full p-5 text-left"
+                data-testid={`button-expand-tracking-${r.id}`}>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  {/* Icon + PO info */}
+                  <div className="flex flex-1 items-center gap-4">
+                    <div className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${
+                      isDelivered ? "bg-emerald-500/15 text-emerald-600" :
+                      isDelayed   ? "bg-amber-500/15 text-amber-600" :
+                      "bg-primary/10 text-primary"
+                    }`}>
+                      <Truck size={20}/>
+                      {!isDelivered && !isDelayed && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-primary animate-pulse" />}
+                      {isDelayed && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-card bg-amber-400 animate-pulse" />}
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs font-bold text-muted-foreground">{r.poNumber}</span>
+                        <Badge tone={isDelivered ? "green" : isDelayed ? "amber" : "blue"}>
+                          {isDelivered ? "✓ Delivered" : isDelayed ? "⚡ At risk" : r.status}
+                        </Badge>
+                        {r.trackingId && <span className="font-mono text-[10px] text-muted-foreground">{r.trackingId}</span>}
+                      </div>
+                      <p className="mt-1 text-sm font-bold">{r.vendor}</p>
+                      <p className="text-xs text-muted-foreground">{r.item}</p>
+                    </div>
+                  </div>
+
+                  {/* Meta */}
+                  <div className="grid grid-cols-3 gap-4 sm:w-auto sm:gap-6">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Location</p>
+                      <p className="mt-1 text-xs font-semibold">{r.location}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">ETA</p>
+                      <p className={`mt-1 font-mono text-xs font-bold ${
+                        isDelivered ? "text-emerald-600" : isDelayed ? "text-amber-600" : "text-foreground"
+                      }`}>{date(r.expectedDelivery)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Carrier</p>
+                      <p className="mt-1 text-xs font-semibold">{r.carrier}</p>
+                    </div>
+                  </div>
+
+                  <ChevronDown size={16} className={`ml-2 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}/>
+                </div>
+
+                {/* Shipment pipeline — always visible */}
+                <ShipmentPipeline status={r.status} delayRisk={r.delayRisk}/>
+              </button>
+
+              {/* Expanded timeline */}
+              {isOpen && (
+                <div className="border-t border-border/60 p-5">
+                  <p className="mb-4 text-[11px] font-bold uppercase tracking-[.14em] text-muted-foreground">Shipment timeline</p>
+                  <div className="relative space-y-5 pl-6">
+                    <div className="absolute left-[7px] top-1 bottom-1 w-0.5 bg-border" />
+                    {[
+                      { label: "Order placed",              time: r.lastUpdate,          done: true },
+                      { label: "Vendor acknowledged PO",    time: r.lastUpdate,          done: stageIndex(r.status) >= 1 },
+                      { label: "Packed & ready to ship",    time: r.lastUpdate,          done: stageIndex(r.status) >= 2 },
+                      { label: `Picked up by ${r.carrier}`, time: r.lastUpdate,          done: stageIndex(r.status) >= 3 },
+                      { label: "Out for delivery",          time: r.lastUpdate,          done: stageIndex(r.status) >= 4 },
+                      { label: "Delivered to destination",  time: r.expectedDelivery,    done: stageIndex(r.status) >= 5 },
+                    ].map((step, i) => (
+                      <div key={i} className="relative flex items-start gap-3">
+                        <div className={`absolute -left-6 mt-0.5 h-3 w-3 rounded-full border-2 ${
+                          step.done ? "border-primary bg-primary" : "border-border bg-card"
+                        }`}/>
+                        <div className="flex-1">
+                          <p className={`text-xs font-semibold ${step.done ? "text-foreground" : "text-muted-foreground/50"}`}>{step.label}</p>
+                          {step.done && <p className="mt-0.5 text-[11px] text-muted-foreground">{new Date(step.time).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</p>}
+                        </div>
+                        {step.done && <Check size={13} className="mt-0.5 shrink-0 text-primary"/>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {isDelayed && (
+                    <div className="mt-5 flex gap-3 rounded-xl border border-amber-500/25 bg-amber-500/[.06] p-4">
+                      <Zap size={16} className="mt-0.5 shrink-0 text-amber-600"/>
+                      <div>
+                        <p className="text-sm font-bold text-amber-700">Delay risk detected</p>
+                        <p className="mt-1 text-xs leading-5 text-amber-600/80">This shipment has an elevated delay probability. AQURA is monitoring and will alert you if the ETA shifts.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function VendorPerformance() { const q=useGetVendorPerformance({query:{queryKey:getGetVendorPerformanceQueryKey()}}); const rows:any[]=q.data??demoVendors.map((v,i)=>({vendorId:v.id,vendorName:v.companyName,onTimeRate:v.performance,avgDeliveryDays:18+i*4,priceCompetitiveness:88-i*5,accuracy:97-i*3,reliability:v.reliability,quality:95-i*2,overall:v.performance})); return <div className="p-5 lg:p-10"><PageHeader eyebrow="Network intelligence" title="Vendor performance" detail="Turn every fulfilled order into a better next decision."/><Section title="Performance index" detail="Current quarter · weighted across delivery, price, quality, and reliability"><div className="overflow-x-auto"><table className="w-full min-w-[850px] text-left"><thead><tr className="border-b border-border text-[10px] uppercase tracking-[.13em] text-muted-foreground"><th className="px-5 py-3">Vendor</th><th className="px-3 py-3">Overall</th><th className="px-3 py-3">On-time</th><th className="px-3 py-3">Avg delivery</th><th className="px-3 py-3">Price</th><th className="px-3 py-3">Quality</th><th className="px-3 py-3">Reliability</th></tr></thead><tbody>{rows.map((v:any)=><tr key={v.vendorId} className="border-b border-border/70 hover:bg-muted/50"><td className="px-5 py-5 font-semibold">{v.vendorName}</td>{[["overall",v.overall],["onTimeRate",v.onTimeRate],["avgDeliveryDays",`${v.avgDeliveryDays}d`],["priceCompetitiveness",v.priceCompetitiveness],["quality",v.quality],["reliability",v.reliability]].map(([k,val])=><td key={k} className="px-3 py-5 font-mono text-sm">{k==="overall"?<span className="font-bold text-primary">{val} / 100</span>:val}{typeof val==="number"&&k!=="avgDeliveryDays"&&<div className="mt-2 h-1 w-16 rounded-full bg-muted"><div className="h-1 rounded-full bg-primary" style={{width:`${val}%`}}/></div>}</td>)}</tr>)}</tbody></table></div></Section></div>; }
 

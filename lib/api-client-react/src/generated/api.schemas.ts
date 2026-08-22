@@ -9,6 +9,20 @@ export interface HealthStatus {
   status: string;
 }
 
+export type LoginResponseUser = {
+  id?: number;
+  name?: string;
+  email?: string;
+  role?: string;
+  department?: string;
+};
+
+export interface LoginResponse {
+  access_token: string;
+  token_type: string;
+  user: LoginResponseUser;
+}
+
 export type DashboardMetrics = {
   activeRequests: number;
   pendingApprovals: number;
@@ -55,10 +69,19 @@ export interface Dashboard {
   insights: Insight[];
 }
 
+export type RequestItemInputItemType = typeof RequestItemInputItemType[keyof typeof RequestItemInputItemType];
+
+
+export const RequestItemInputItemType = {
+  Product: 'Product',
+  Service: 'Service',
+} as const;
+
 export interface RequestItemInput {
   itemName: string;
   description?: string;
   category?: string;
+  itemType?: RequestItemInputItemType;
   /** @minimum 1 */
   quantity: number;
   unit: string;
@@ -385,6 +408,11 @@ export type StatusParameter = string;
 
 export type PageParameter = number;
 
+export type LoginBody = {
+  username: string;
+  password: string;
+};
+
 export type ListPurchaseRequestsParams = {
 search?: SearchParameter;
 status?: StatusParameter;
@@ -400,6 +428,14 @@ search?: SearchParameter;
  * @minimum 1
  */
 page?: PageParameter;
+};
+
+export type ContactVendorBody = {
+  message: string;
+};
+
+export type ContactVendor200 = {
+  success?: boolean;
 };
 
 export type DiscoverVendorsParams = {
