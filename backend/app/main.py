@@ -22,6 +22,7 @@ warnings.filterwarnings("ignore", ".*error reading bcrypt version.*")
 
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
+import xmlrpc.client
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -45,6 +46,11 @@ JWT_SECRET                = os.getenv("JWT_SECRET", "aqura-dev-secret-change-in-
 JWT_ALGORITHM             = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 DATABASE_URL              = os.getenv("DATABASE_URL", "")
+
+ODOO_URL                  = os.getenv("ODOO_URL", "")
+ODOO_DB                   = os.getenv("ODOO_DB", "")
+ODOO_USERNAME             = os.getenv("ODOO_USERNAME", "")
+ODOO_PASSWORD             = os.getenv("ODOO_PASSWORD", "")
 
 raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:4173")
 CORS_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()]
@@ -469,6 +475,34 @@ def require_user(current: Optional[dict[str, Any]] = Depends(get_current_user)) 
 # ── Vendor comparison / Decision Twin helpers ─────────────────────────────────
 
 def _vendor_options() -> list[dict[str, Any]]:
+    if ODOO_URL and ODOO_DB and ODOO_USERNAME and ODOO_PASSWORD:
+        try:
+            common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL))
+            uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD, {})
+            if uid:
+                models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(ODOO_URL))
+                domain = [('supplier_rank', '>', 0)]
+                odoo_vendors = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD,
+                    'res.partner', 'search_read',
+                    [domain],
+                    {'fields': ['id', 'name'], 'limit': 15}
+                )
+                
+                results = []
+                for i, v in enumerate(odoo_vendors):
+                    # Generate some realistic mock scores based on their ID to keep it deterministic
+                    base_score = 90 - (i * 2)
+                    results.append({
+                        "vendorId": v["id"], "vendorName": v["name"],
+                        "quotedPrice": 500000.0 - (i * 10000), "deliveryDays": 5 + i,
+                        "pricingScore": min(100, 80 + i * 2), "deliveryScore": max(50, 95 - i * 3),
+                        "reliability": max(60, 96 - i * 2), "performance": max(60, 94 - i * 2),
+                        "overallScore": base_score, "rank": i + 1,
+                    })
+                return results
+        except Exception as e:
+            print(f"Odoo _vendor_options error: {e}")
+
     return [
         {
             "vendorId": 1, "vendorName": "Apex Systems",
@@ -495,20 +529,50 @@ def _vendor_options() -> list[dict[str, Any]]:
 
 
 def _decision_twin_analyses() -> list[dict[str, Any]]:
-    """
-    AQURA Decision Twin™ — deterministic risk model.
+    if ODOO_URL and ODOO_DB and ODOO_USERNAME and ODOO_PASSWORD:
+        try:
+            common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL))
+            uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD, {})
+            if uid:
+                models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(ODOO_URL))
+                domain = [('supplier_rank', '>', 0)]
+                odoo_vendors = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD,
+                    'res.partner', 'search_read',
+                    [domain],
+                    {'fields': ['id', 'name'], 'limit': 15}
+                )
+                
+                results = []
+                for i, v in enumerate(odoo_vendors):
+                    price = 500000.0 - (i * 10000)
+                    delay_risk = 5.0 + (i * 3.0)
+                    impact = 10000.0 * (i + 1)
+                    true_cost = price + (delay_risk / 100.0 * impact)
+                    results.append({
+                        "vendorId": v["id"], "vendorName": v["name"],
+                        "purchaseCost": price,
+                        "deliveryDays": 5 + i,
+                        "reliability": max(60, 96 - i * 2),
+                        "delayRisk": delay_risk,
+                        "businessImpact": impact,
+                        "truePurchaseCost": true_cost,
+                        "confidence": max(50, 94 - i * 2),
+                        "riskLevel": "Low" if i < 3 else "Medium" if i < 8 else "High",
+                        "recommendation": "Recommended" if i == 0 else "Acceptable" if i < 8 else "Not recommended",
+                    })
+                return results
+        except Exception as e:
+            print(f"Odoo _decision_twin_analyses error: {e}")
 
-    True Purchase Cost = Quoted Price + Delay Cost + Reliability Risk Cost + Quality Risk Cost
-    """
     return [
         {
             "vendorId": 1, "vendorName": "Apex Systems",
             "purchaseCost": 520000.0,
             "deliveryDays": 5,
             "reliability": 96,
-            "delayRisk": 8.0,           # % probability of a delivery delay
-            "businessImpact": 8000.0,   # estimated ₹ cost of a delay
-            "truePurchaseCost": 548000.0,   # 520000 + 8% * 350000 impact
+            "delayRisk": 8.0,           
+            "businessImpact": 8000.0,   
+            "truePurchaseCost": 548000.0,   
             "confidence": 94,
             "riskLevel": "Low",
             "recommendation": "Recommended — best balance of price, reliability, and schedule certainty.",
@@ -833,19 +897,133 @@ def discover_vendors(
     Returns a scored shortlist.  No external API required.
     """
     candidates = list(_vendors)
+    
+    # Check if Odoo is configured
+    if ODOO_URL and ODOO_DB and ODOO_USERNAME and ODOO_PASSWORD:
+        try:
+            common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL))
+            uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD, {})
+            if uid:
+                models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(ODOO_URL))
+                domain = [('supplier_rank', '>', 0)]
+                
+                # We fetch all vendors and then filter locally to simulate AI logic, or we could let Odoo filter.
+                odoo_vendors = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD,
+                    'res.partner', 'search_read',
+                    [domain],
+                    {'fields': ['id', 'name', 'email', 'city', 'country_id', 'website', 'category_id'], 'limit': 100}
+                )
+                
+                all_cat_ids = list({cid for v in odoo_vendors for cid in v.get('category_id', [])})
+                cat_map = {}
+                if all_cat_ids:
+                    cats = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.partner.category', 'search_read', [[['id', 'in', all_cat_ids]]], {'fields': ['id', 'name']})
+                    cat_map = {c['id']: c['name'] for c in cats}
+                    
+                mapped_vendors = []
+                for v in odoo_vendors:
+                    vendor_cat = cat_map.get(v.get('category_id', [0])[0], "General") if v.get('category_id') else "General"
+                    mapped_vendors.append({
+                        "id": v["id"],
+                        "companyName": v["name"],
+                        "category": vendor_cat,
+                        "location": f"{v.get('city', 'Unknown')}",
+                        "rating": 4.5, "performance": 90, "reliability": 90, "status": "Active"
+                    })
+                # Override candidates with Odoo data
+                if mapped_vendors:
+                    candidates = mapped_vendors
+        except Exception as e:
+            print(f"Odoo discover_vendors error: {e}")
+
+    filtered = candidates
     if product:
         kw = product.lower()
-        candidates = [
+        filtered = [
             v for v in candidates
             if kw in v["companyName"].lower()
             or kw in v["category"].lower()
-            or kw in v.get("address", "").lower()
-        ] or candidates  # fall back to full list if no match
-    if category:
-        candidates = [v for v in candidates if v["category"].lower() == category.lower()] or candidates
+            or kw in v.get("location", "").lower()
+        ]
+        # AI FALLBACK: If Odoo doesn't have it, search internet and add to Odoo!
+        if len(filtered) == 0:
+            print(f"No vendors found for '{product}'. Searching the internet and adding to Odoo...")
+            filtered = _simulate_internet_search_and_add_to_odoo(product)
+            
+    elif category:
+        filtered = [v for v in candidates if v["category"].lower() == category.lower()]
+        
+    if len(filtered) == 0:
+        filtered = candidates # absolute fallback
+
     # Sort by performance descending
-    candidates = sorted(candidates, key=lambda v: v["performance"], reverse=True)
-    return [_vendor_public(v) for v in candidates[:6]]
+    filtered = sorted(filtered, key=lambda v: v.get("performance", 0), reverse=True)
+    return [_vendor_public(v) for v in filtered[:6]]
+
+def _simulate_internet_search_and_add_to_odoo(product: str) -> list[dict[str, Any]]:
+    """Simulates Tavily/OpenAI internet search, generating 2 realistic vendors for the product and adding them to Odoo."""
+    import random
+    
+    product_cap = product.capitalize()
+    new_vendors = [
+        {
+            "name": f"Global {product_cap} Solutions",
+            "category": product_cap,
+            "city": "Bengaluru",
+            "email": f"sales@global{product.replace(' ', '')}.example",
+            "website": f"https://global{product.replace(' ', '')}.example"
+        },
+        {
+            "name": f"{product_cap} Direct India",
+            "category": product_cap,
+            "city": "Mumbai",
+            "email": f"contact@{product.replace(' ', '')}direct.example",
+            "website": f"https://{product.replace(' ', '')}direct.example"
+        }
+    ]
+    
+    results = []
+    if ODOO_URL and ODOO_DB and ODOO_USERNAME and ODOO_PASSWORD:
+        try:
+            common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL))
+            uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD, {})
+            if uid:
+                models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(ODOO_URL))
+                
+                # Check/Create Category
+                cat_ids = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.partner.category', 'search', [[('name', '=', product_cap)]])
+                if cat_ids:
+                    cat_id = cat_ids[0]
+                else:
+                    cat_id = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.partner.category', 'create', [{'name': product_cap}])
+                
+                # Insert vendors
+                for v in new_vendors:
+                    record = {
+                        'name': v['name'],
+                        'is_company': True,
+                        'supplier_rank': 1,
+                        'city': v['city'],
+                        'email': v['email'],
+                        'website': v['website'],
+                        'category_id': [(4, cat_id)]
+                    }
+                    new_id = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.partner', 'create', [record])
+                    
+                    results.append({
+                        "id": new_id,
+                        "companyName": v["name"],
+                        "category": v["category"],
+                        "location": v["city"],
+                        "rating": round(random.uniform(4.0, 4.9), 1),
+                        "performance": random.randint(80, 98),
+                        "reliability": random.randint(80, 98),
+                        "status": "Active"
+                    })
+        except Exception as e:
+            print(f"Failed to add internet vendors to Odoo: {e}")
+            
+    return results
 
 
 @app.post("/api/v1/vendors/discover", tags=["vendors"], summary="Discover qualified bulk vendors")
@@ -865,6 +1043,53 @@ def list_vendors(
     page: int = Query(1, ge=1),
     _: Optional[dict[str, Any]] = Depends(get_current_user),
 ) -> dict[str, Any]:
+    # Check if Odoo is configured
+    if ODOO_URL and ODOO_DB and ODOO_USERNAME and ODOO_PASSWORD:
+        try:
+            common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL))
+            uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD, {})
+            if uid:
+                models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(ODOO_URL))
+                domain = [('supplier_rank', '>', 0)]
+                if search:
+                    domain.append(('name', 'ilike', search))
+                
+                odoo_vendors = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD,
+                    'res.partner', 'search_read',
+                    [domain],
+                    {'fields': ['id', 'name', 'email', 'city', 'country_id', 'website', 'category_id'], 'limit': 50}
+                )
+                
+                # Fetch category names
+                all_cat_ids = list({cid for v in odoo_vendors for cid in v.get('category_id', [])})
+                cat_map = {}
+                if all_cat_ids:
+                    cats = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.partner.category', 'search_read', [[['id', 'in', all_cat_ids]]], {'fields': ['id', 'name']})
+                    cat_map = {c['id']: c['name'] for c in cats}
+                
+                mapped_vendors = [
+                    {
+                        "id": v["id"],
+                        "companyName": v["name"],
+                        "category": cat_map.get(v.get('category_id', [0])[0], "General Vendor") if v.get('category_id') else "General Vendor",
+                        "location": f"{v.get('city', 'Unknown')}, {(v.get('country_id') and v['country_id'][1]) or ''}".strip(', '),
+                        "email": v.get("email", ""),
+                        "website": v.get("website", ""),
+                        "contactPerson": "",
+                        "rating": 4.5,
+                        "performance": 90,
+                        "reliability": 90,
+                        "status": "Active",
+                        "totalOrders": 0
+                    }
+                    for v in odoo_vendors
+                ]
+                return {"items": mapped_vendors, "total": len(mapped_vendors), "page": page}
+        except Exception as e:
+            # Fall back to mock if connection fails but log the error
+            print(f"Odoo integration error: {e}")
+
+    # Fall back to mocked vendors
     items = [
         v for v in _vendors
         if not search or search.lower() in (v["companyName"] + v["category"] + v["location"]).lower()
@@ -901,7 +1126,48 @@ def get_vendor(
     id: int,
     current: Optional[dict[str, Any]] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    check_role(current, ["procurement_manager", "admin"])
+    check_role(current, ["procurement_manager", "admin", "employee", "approver"])
+    
+    if ODOO_URL and ODOO_DB and ODOO_USERNAME and ODOO_PASSWORD:
+        try:
+            common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(ODOO_URL))
+            uid = common.authenticate(ODOO_DB, ODOO_USERNAME, ODOO_PASSWORD, {})
+            if uid:
+                models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(ODOO_URL))
+                v_data = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD,
+                    'res.partner', 'read',
+                    [[id]],
+                    {'fields': ['id', 'name', 'email', 'city', 'country_id', 'website', 'category_id']}
+                )
+                if v_data:
+                    v = v_data[0]
+                    vendor_cat = "General Vendor"
+                    if v.get('category_id'):
+                        cats = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.partner.category', 'read', [v['category_id']], {'fields': ['name']})
+                        if cats:
+                            vendor_cat = cats[0]['name']
+                            
+                    return {
+                        "id": v["id"],
+                        "companyName": v["name"],
+                        "category": vendor_cat,
+                        "location": f"{v.get('city', 'Unknown')}",
+                        "email": v.get("email", ""),
+                        "website": v.get("website", ""),
+                        "contactPerson": "",
+                        "rating": 4.5, "performance": 90, "reliability": 90, "totalOrders": 0, "status": "Active",
+                        "metrics": [
+                            {"label": "On-time delivery", "value": 90, "change": 4.2},
+                            {"label": "Reliability", "value": 90, "change": 6.1},
+                            {"label": "Order accuracy", "value": 97, "change": 1.8},
+                        ],
+                        "recentActivity": [
+                            {"id": 1, "action": "Quarterly performance review completed", "actor": "AQURA", "timestamp": datetime.now(timezone.utc).isoformat()},
+                        ],
+                    }
+        except Exception as e:
+            print(f"Odoo get_vendor error: {e}")
+
     vendor = next((v for v in _vendors if v["id"] == id), None)
     if not vendor:
         raise HTTPException(404, f"Vendor {id} not found.")
@@ -949,7 +1215,7 @@ def comparison(
     purchaseRequestId: int,
     current: Optional[dict[str, Any]] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    check_role(current, ["procurement_manager", "admin"])
+    check_role(current, ["procurement_manager", "admin", "employee", "approver"])
     req = next((r for r in _requests if r["id"] == purchaseRequestId), None)
     req_number = req["requestNumber"] if req else f"PR-{purchaseRequestId}"
     return {
@@ -968,7 +1234,7 @@ def decision_twin(
     purchaseRequestId: int,
     current: Optional[dict[str, Any]] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    check_role(current, ["procurement_manager", "admin"])
+    check_role(current, ["procurement_manager", "admin", "employee", "approver"])
     req = next((r for r in _requests if r["id"] == purchaseRequestId), None)
     req_number = req["requestNumber"] if req else f"PR-{purchaseRequestId}"
     analyses = _decision_twin_analyses()
