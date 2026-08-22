@@ -185,14 +185,39 @@ _vendors: list[dict[str, Any]] = [
     },
 ]
 
-# Demo capability records mirror the fields persisted by the production vendor
-# and vendor-product-capability tables. They keep the local fallback fully testable.
+# ── INR currency helpers ──────────────────────────────────────────────────────
+DEFAULT_CURRENCY = os.getenv("DEFAULT_CURRENCY", "INR")
+DEFAULT_GST_RATE = float(os.getenv("DEFAULT_GST_RATE", "18"))
+
+
+def money(amount: float, currency: str = DEFAULT_CURRENCY) -> dict[str, Any]:
+    """Return a structured money object for API responses."""
+    return {"amount": round(amount, 2), "currency_code": currency}
+
+
+def gst_breakdown(subtotal: float, rate: float = DEFAULT_GST_RATE) -> dict[str, Any]:
+    """Return CGST/SGST/IGST breakdown (assumes intra-state for demo)."""
+    cgst = round(subtotal * rate / 200, 2)   # half of GST rate
+    sgst = cgst
+    igst = 0.0
+    return {"subtotal": round(subtotal, 2), "cgst": cgst, "sgst": sgst, "igst": igst,
+            "total_tax": round(cgst + sgst, 2), "total_amount": round(subtotal + cgst + sgst, 2),
+            "gst_rate": rate, "currency_code": DEFAULT_CURRENCY}
+
+
+# ── Seed vendors with discovery-ready capability data ─────────────────────────
+# Format: id → (lat, lon, delivery_radius_km, available_qty, min_order_qty,
+#               product_name, min_capacity, max_capacity, bulk_price_inr,
+#               lead_time_days, delivery_available)
+# NOTE: delivery_radius_km is the vendor's LOCAL last-mile radius.
+#       It is NOT used to filter discovery results (that was the bug).
+#       It is used only as a scoring bonus in ranking.
 _discovery_capabilities = {
-    1: (12.9716, 77.5946, 80, 500, 1000, "Business laptop", 20, 800, 44000, 5, True),
-    2: (19.0760, 72.8777, 120, 500, 1000, "Business laptop", 20, 1200, 42500, 7, True),
-    3: (18.5204, 73.8567, 35, 40, 10, "Ergonomic office chair", 10, 250, 2100, 4, True),
-    4: (17.3850, 78.4867, 80, 100, 1, "Cloud observability license", 1, 100, 4500, 2, True),
-    5: (13.0827, 80.2707, 50, 10000, 500, "Industrial equipment", 500, 5000, 18500, 9, True),
+    1: (12.9716, 77.5946, 500, 500, 20, "Business laptop", 20, 800, 44000, 5, True),
+    2: (19.0760, 72.8777, 500, 500, 20, "Business laptop", 20, 1200, 42500, 7, True),
+    3: (18.5204, 73.8567, 500, 400, 10, "Ergonomic office chair", 10, 250, 2100, 4, True),
+    4: (17.3850, 78.4867, 500, 100, 1, "Cloud observability license", 1, 100, 4500, 2, True),
+    5: (13.0827, 80.2707, 500, 10000, 500, "Industrial equipment", 500, 5000, 18500, 9, True),
 }
 for _vendor in _vendors:
     _latitude, _longitude, _delivery_radius, _available, _minimum, _product_name, _minimum_capacity, _maximum_capacity, _bulk_price, _lead_time, _delivery = _discovery_capabilities[_vendor["id"]]
@@ -200,33 +225,63 @@ for _vendor in _vendors:
         "latitude": _latitude, "longitude": _longitude, "country": "India",
         "bulkOrderSupported": True, "minimumOrderQuantity": _minimum,
         "maximumSupplyCapacity": _maximum_capacity, "deliveryRadiusKm": _delivery_radius,
-        "averageBulkPrice": _bulk_price,
-        "capabilities": [{"productName": _product_name, "productCategory": _vendor["category"], "minimumOrderQuantity": _minimum, "availableQuantity": _available, "maximumOrderCapacity": _maximum_capacity, "bulkPrice": _bulk_price, "unit": "units", "deliveryAvailable": _delivery, "leadTimeDays": _lead_time, "isActive": True}],
-        "defaultCapability": {"productName": _product_name, "availableQuantity": _available, "maximumOrderCapacity": _maximum_capacity, "bulkPrice": _bulk_price, "minimumOrderQuantity": _minimum, "deliveryAvailable": _delivery, "leadTimeDays": _lead_time},
+        "averageBulkPrice": _bulk_price, "currencyCode": DEFAULT_CURRENCY,
+        "capabilities": [{"productName": _product_name, "productCategory": _vendor["category"], "minimumOrderQuantity": _minimum, "availableQuantity": _available, "maximumOrderCapacity": _maximum_capacity, "bulkPrice": _bulk_price, "unit": "units", "deliveryAvailable": _delivery, "leadTimeDays": _lead_time, "isActive": True, "currencyCode": DEFAULT_CURRENCY}],
+        "defaultCapability": {"productName": _product_name, "availableQuantity": _available, "maximumOrderCapacity": _maximum_capacity, "bulkPrice": _bulk_price, "minimumOrderQuantity": _minimum, "deliveryAvailable": _delivery, "leadTimeDays": _lead_time, "currencyCode": DEFAULT_CURRENCY},
     })
 
+# Extended seed: nation-wide suppliers covering all major categories + more
+# Pune-area IT vendors added so discovery works out-of-the-box with city=Pune
 _seed_locations = [
-    ("Pune BuildMart", "Construction Materials", "Pune", 18.59, 73.74, "Cement", 5000, 30000, 92),
-    ("Pune Office Works", "Office Supplies", "Pune", 18.56, 73.78, "Ergonomic office chair", 80, 500, 2150),
-    ("Mumbai Industrial Hub", "Industrial Supplies", "Mumbai", 19.12, 72.92, "Industrial equipment", 1000, 15000, 17800),
-    ("Mumbai Tech Depot", "IT Hardware", "Mumbai", 19.02, 72.86, "Business laptop", 30, 900, 41800),
-    ("Bengaluru Device House", "IT Hardware", "Bengaluru", 12.93, 77.62, "Business laptop", 25, 600, 43500),
-    ("Bengaluru Workspace", "Furniture", "Bengaluru", 13.01, 77.56, "Ergonomic office chair", 50, 400, 2050),
-    ("Hyderabad Cloud Supply", "Cloud Services", "Hyderabad", 17.44, 78.39, "Cloud observability license", 1, 200, 4300),
-    ("Hyderabad Hardware Co", "IT Hardware", "Hyderabad", 17.35, 78.51, "Business laptop", 20, 500, 42750),
-    ("Chennai Packworks", "Packaging", "Chennai", 13.06, 80.25, "Packaging boxes", 500, 25000, 18),
-    ("Chennai Industrial", "Industrial Supplies", "Chennai", 12.99, 80.21, "Industrial equipment", 250, 8000, 18200),
-    ("Delhi Raw Materials", "Raw Materials", "Delhi", 28.63, 77.22, "Cement", 1000, 50000, 89),
-    ("Delhi Office Source", "Office Supplies", "Delhi", 28.57, 77.31, "Ergonomic office chair", 20, 700, 1980),
-    ("Kolkata Supply Network", "Packaging", "Kolkata", 22.57, 88.39, "Packaging boxes", 200, 12000, 20),
-    ("Ahmedabad Material House", "Construction Materials", "Ahmedabad", 23.05, 72.59, "Cement", 500, 40000, 90),
-    ("Jaipur Furnishings", "Furniture", "Jaipur", 26.91, 75.79, "Ergonomic office chair", 25, 600, 2025),
+    # ── Pune cluster (within 30 km — guaranteed hits for city=Pune searches) ──
+    ("Pune Tech Solutions",      "IT Hardware",            "Pune",       18.53, 73.85, "Business laptop",            5,    300,  41500, 3, True),
+    ("Pune Laptop Hub",          "IT Hardware",            "Pune",       18.50, 73.87, "Business laptop",            10,   500,  40800, 2, True),
+    ("Pune Office Works",        "Office Supplies",        "Pune",       18.56, 73.78, "Ergonomic office chair",     10,   500,   2150, 4, True),
+    ("Pune BuildMart",           "Construction Materials", "Pune",       18.59, 73.74, "Cement",                   1000, 30000,     92, 5, True),
+    ("PuneCloud Infra",          "Cloud Services",         "Pune",       18.51, 73.91, "Cloud observability license",1,   150,   4250, 1, True),
+    # ── Mumbai cluster (120 km from Pune) ──────────────────────────────────────
+    ("Mumbai Tech Depot",        "IT Hardware",            "Mumbai",     19.02, 72.86, "Business laptop",            20,  900,  41800, 7, True),
+    ("Mumbai Industrial Hub",    "Industrial Supplies",    "Mumbai",     19.12, 72.92, "Industrial equipment",       500,15000,  17800, 9, True),
+    ("Mumbai Office Hub",        "Office Supplies",        "Mumbai",     19.05, 72.88, "Ergonomic office chair",     20,  800,   2000, 5, True),
+    # ── Nashik cluster (170 km from Pune) ─────────────────────────────────────
+    ("Nashik Hardware World",    "IT Hardware",            "Nashik",     19.99, 73.79, "Business laptop",            10,  400,  40500, 4, True),
+    ("Nashik BuildSupply",       "Construction Materials", "Nashik",     20.01, 73.81, "Cement",                    500, 20000,    90, 6, True),
+    # ── Bengaluru ─────────────────────────────────────────────────────────────
+    ("Bengaluru Device House",   "IT Hardware",            "Bengaluru",  12.93, 77.62, "Business laptop",            25,  600,  43500, 5, True),
+    ("Bengaluru Workspace",      "Furniture",              "Bengaluru",  13.01, 77.56, "Ergonomic office chair",     50,  400,   2050, 4, True),
+    # ── Hyderabad ─────────────────────────────────────────────────────────────
+    ("Hyderabad Hardware Co",    "IT Hardware",            "Hyderabad",  17.35, 78.51, "Business laptop",            20,  500,  42750, 6, True),
+    ("Hyderabad Cloud Supply",   "Cloud Services",         "Hyderabad",  17.44, 78.39, "Cloud observability license", 1,  200,   4300, 2, True),
+    # ── Chennai ───────────────────────────────────────────────────────────────
+    ("Chennai Packworks",        "Packaging",              "Chennai",    13.06, 80.25, "Packaging boxes",            500,25000,    18, 4, True),
+    ("Chennai Industrial",       "Industrial Supplies",    "Chennai",    12.99, 80.21, "Industrial equipment",       250, 8000,  18200, 8, True),
+    # ── Delhi ─────────────────────────────────────────────────────────────────
+    ("Delhi Raw Materials",      "Raw Materials",          "Delhi",      28.63, 77.22, "Cement",                   1000,50000,    89, 7, True),
+    ("Delhi Office Source",      "Office Supplies",        "Delhi",      28.57, 77.31, "Ergonomic office chair",     20,  700,   1980, 5, True),
+    # ── Others ────────────────────────────────────────────────────────────────
+    ("Kolkata Supply Network",   "Packaging",              "Kolkata",    22.57, 88.39, "Packaging boxes",            200,12000,    20, 6, True),
+    ("Ahmedabad Material House", "Construction Materials", "Ahmedabad",  23.05, 72.59, "Cement",                    500,40000,    90, 6, True),
+    ("Jaipur Furnishings",       "Furniture",              "Jaipur",     26.91, 75.79, "Ergonomic office chair",     25,  600,   2025, 5, True),
 ]
-for _index, (_name, _category, _city, _latitude, _longitude, _product, _minimum, _capacity, _price) in enumerate(_seed_locations, start=6):
+for _index, (_name, _category, _city, _latitude, _longitude, _product, _minimum, _capacity, _price, _lead, _deliv) in enumerate(_seed_locations, start=6):
     _vendors.append({
-        "id": _index, "companyName": _name, "category": _category, "location": f"{_city}, IN", "rating": round(4.0 + (_index % 9) / 10, 1), "performance": 76 + (_index % 22), "reliability": 74 + (_index % 25), "status": "Active", "contactPerson": "Vendor desk", "email": f"desk{_index}@aqura.example", "address": _city, "latitude": _latitude, "longitude": _longitude, "bulkOrderSupported": True, "minimumOrderQuantity": _minimum, "maximumSupplyCapacity": _capacity, "deliveryRadiusKm": 75, "averageBulkPrice": _price,
-        "capabilities": [{"productName": _product, "productCategory": _category, "minimumOrderQuantity": _minimum, "availableQuantity": _capacity, "maximumOrderCapacity": _capacity, "bulkPrice": _price, "unit": "units", "deliveryAvailable": True, "leadTimeDays": 2 + (_index % 7), "isActive": True}],
-        "defaultCapability": {"productName": _product, "availableQuantity": _capacity, "maximumOrderCapacity": _capacity, "bulkPrice": _price, "minimumOrderQuantity": _minimum, "deliveryAvailable": True, "leadTimeDays": 2 + (_index % 7)},
+        "id": _index, "companyName": _name, "category": _category,
+        "location": f"{_city}, IN",
+        "rating": round(3.9 + (_index % 11) / 10, 1),
+        "performance": 74 + (_index % 24),
+        "reliability": 72 + (_index % 26),
+        "status": "Active",
+        "contactPerson": "Vendor desk",
+        "email": f"desk{_index}@aqura.example",
+        "address": _city,
+        "latitude": _latitude, "longitude": _longitude, "country": "India",
+        "bulkOrderSupported": True,
+        "minimumOrderQuantity": _minimum,
+        "maximumSupplyCapacity": _capacity,
+        "deliveryRadiusKm": 500,          # nationwide courier delivery
+        "averageBulkPrice": _price, "currencyCode": DEFAULT_CURRENCY,
+        "capabilities": [{"productName": _product, "productCategory": _category, "minimumOrderQuantity": _minimum, "availableQuantity": _capacity, "maximumOrderCapacity": _capacity, "bulkPrice": _price, "unit": "units", "deliveryAvailable": _deliv, "leadTimeDays": _lead, "isActive": True, "currencyCode": DEFAULT_CURRENCY}],
+        "defaultCapability": {"productName": _product, "availableQuantity": _capacity, "maximumOrderCapacity": _capacity, "bulkPrice": _price, "minimumOrderQuantity": _minimum, "deliveryAvailable": _deliv, "leadTimeDays": _lead, "currencyCode": DEFAULT_CURRENCY},
     })
 
 _vendor_discovery_service = VendorDiscoveryService()
@@ -1159,7 +1214,7 @@ def analytics(_: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[s
             ]
         ],
         "topVendors": [
-            {"vendorId": v["id"], "vendorName": v["companyName"], "spend": v["totalOrders"] * 50000}
+            {"vendorId": v["id"], "vendorName": v["companyName"], "spend": v.get("totalOrders", 10) * 50000}
             for v in sorted(_vendors, key=lambda x: x["performance"], reverse=True)[:5]
         ],
         "processingTime": 2.4,
@@ -1266,3 +1321,87 @@ def list_users(current: dict[str, Any] = Depends(require_user)) -> list[dict[str
     if current.get("role") != "admin":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin access required.")
     return [_user_public(u) for u in _users]
+
+# ── ERP Integration ───────────────────────────────────────────────────────────
+
+from .providers.erp.factory import get_erp_provider as _get_erp_provider
+
+
+@app.get("/api/v1/erp/status", tags=["erp"], summary="ERP integration status")
+async def erp_status(_: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
+    provider = _get_erp_provider()
+    status_data = await provider.get_sync_status()
+    return {"provider": provider.name, **status_data}
+
+
+@app.post("/api/v1/erp/test-connection", tags=["erp"], summary="Test ERP connection")
+async def erp_test_connection(_: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    provider = _get_erp_provider()
+    result = await provider.test_connection()
+    return {
+        "success": result.success,
+        "message": result.message,
+        "provider": result.provider,
+        "account_id": result.account_id,
+        "environment": result.environment,
+        "latency_ms": result.latency_ms,
+    }
+
+
+@app.post("/api/v1/erp/sync/{entity}", tags=["erp"], summary="Sync an ERP entity")
+async def erp_sync_entity(
+    entity: str,
+    current: dict[str, Any] = Depends(require_user),
+) -> dict[str, Any]:
+    allowed = {"vendors", "items", "purchase_orders", "inventory", "departments", "employees", "all"}
+    if entity not in allowed:
+        raise HTTPException(400, f"Unknown entity '{entity}'. Choose from: {', '.join(sorted(allowed))}")
+    provider = _get_erp_provider()
+    if entity == "all":
+        results = await provider.sync_all()
+        return {"success": all(r.success for r in results), "results": [r.to_dict() for r in results]}
+    sync_fn = getattr(provider, f"sync_{entity}", None)
+    if sync_fn is None:
+        raise HTTPException(400, f"Entity '{entity}' has no sync method.")
+    result = await sync_fn()
+    return result.to_dict()
+
+
+@app.get("/api/v1/erp/config", tags=["erp"], summary="Get ERP configuration (safe fields only)")
+def erp_config(current: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
+    if current.get("role") not in {"admin", "procurement_manager"}:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin or Procurement Manager access required.")
+    return {
+        "erp_provider": os.getenv("ERP_PROVIDER", "mock"),
+        "erp_sync_enabled": os.getenv("ERP_SYNC_ENABLED", "false"),
+        "netsuite_mode": os.getenv("NETSUITE_INTEGRATION_MODE", "mock"),
+        "netsuite_account_configured": bool(os.getenv("NETSUITE_ACCOUNT_ID")),
+        "netsuite_auth_mode": os.getenv("NETSUITE_AUTH_MODE", "mock"),
+        "netsuite_sync_enabled": os.getenv("NETSUITE_SYNC_ENABLED", "false"),
+        "netsuite_sync_interval_minutes": os.getenv("NETSUITE_SYNC_INTERVAL_MINUTES", "15"),
+    }
+
+
+# ── Currency & Tax ────────────────────────────────────────────────────────────
+
+@app.get("/api/v1/currency/config", tags=["currency"], summary="Get currency configuration")
+def currency_config() -> dict[str, Any]:
+    return {
+        "default_currency": DEFAULT_CURRENCY,
+        "default_locale": os.getenv("DEFAULT_LOCALE", "en-IN"),
+        "default_gst_rate": DEFAULT_GST_RATE,
+        "currency_symbol": "₹",
+        "supported_currencies": ["INR"],
+    }
+
+
+@app.post("/api/v1/currency/gst-breakdown", tags=["currency"], summary="Calculate GST breakdown")
+def currency_gst(payload: dict[str, Any]) -> dict[str, Any]:
+    subtotal = float(payload.get("subtotal", 0))
+    rate = float(payload.get("gst_rate", DEFAULT_GST_RATE))
+    inter_state = bool(payload.get("inter_state", False))
+    breakdown = gst_breakdown(subtotal, rate)
+    if inter_state:
+        igst = round(subtotal * rate / 100, 2)
+        breakdown = {**breakdown, "cgst": 0.0, "sgst": 0.0, "igst": igst, "total_tax": igst, "total_amount": round(subtotal + igst, 2)}
+    return breakdown

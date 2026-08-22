@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from .distance_service import DistanceService
 from .location_service import LocationService
 from .radius_expansion_service import RadiusExpansionService
@@ -7,6 +9,8 @@ from .vendor_capacity_service import VendorCapacityService
 from .multi_vendor_fulfillment_service import MultiVendorFulfillmentService
 from .vendor_ranking_service import VendorRankingService
 from .vendor_recommendation_service import VendorRecommendationService
+
+DEFAULT_CURRENCY = os.getenv("DEFAULT_CURRENCY", "INR")
 
 
 class VendorDiscoveryService:
@@ -45,5 +49,5 @@ class VendorDiscoveryService:
         results = []
         for rank, match in enumerate(ranked, 1):
             vendor, capability = match["vendor"], match["capability"]
-            results.append({"id": vendor["id"], "rank": rank, "company_name": vendor["companyName"], "distance_km": round(match["distance_km"], 1), "product_name": capability["productName"], "available_quantity": match["available_quantity"], "required_quantity": request.required_quantity, "bulk_order_supported": vendor["bulkOrderSupported"], "bulk_price": match["bulk_price"], "estimated_total_price": round(match["bulk_price"] * request.required_quantity, 2), "lead_time_days": capability.get("leadTimeDays", 0), "delivery_available": capability.get("deliveryAvailable", False), "rating": vendor.get("rating", 0), "reliability_score": vendor.get("reliability", 0), "overall_score": match["overall_score"], "recommendation": rank == 1, "recommendation_reasons": self.recommendation.explain(match, request.required_quantity)})
+            results.append({"id": vendor["id"], "rank": rank, "company_name": vendor["companyName"], "distance_km": round(match["distance_km"], 1), "product_name": capability["productName"], "available_quantity": match["available_quantity"], "required_quantity": request.required_quantity, "bulk_order_supported": vendor["bulkOrderSupported"], "bulk_price": match["bulk_price"], "currency_code": capability.get("currencyCode", DEFAULT_CURRENCY), "estimated_total_price": round(match["bulk_price"] * request.required_quantity, 2), "lead_time_days": capability.get("leadTimeDays", 0), "delivery_available": capability.get("deliveryAvailable", False), "rating": vendor.get("rating", 0), "reliability_score": vendor.get("reliability", 0), "overall_score": match["overall_score"], "recommendation": rank == 1, "recommendation_reasons": self.recommendation.explain(match, request.required_quantity)})
         return {"success": True, "message": "Qualified vendors discovered successfully", "data": {"search": {"product_name": request.product_name, "category": request.category, "required_quantity": request.required_quantity, "unit": request.unit}, "buyer_location": buyer, "radius_search_summary": {"initial_radius_km": request.initial_radius_km, "final_radius_km": final_radius, "maximum_radius_km": request.maximum_radius_km, "auto_expanded": final_radius > request.initial_radius_km}, "insight": f"Only {levels[0]['qualified_vendor_count']} qualified vendors were found within {request.initial_radius_km:g} km. Aqura expanded the search to {final_radius:g} km and found {len(results)} qualified vendors." if final_radius > request.initial_radius_km else f"{len(results)} qualified vendors were found within the initial search radius.", "vendors": results, "radius_levels": levels, "multi_vendor_fulfillment": fulfillment}}
