@@ -388,6 +388,10 @@ def get_current_user(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[
         return None
 
 
+def check_role(current: dict[str, Any], allowed_roles: list[str]):
+    if not current or current.get("role") not in allowed_roles:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized for this role.")
+
 def require_user(current: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
     if current is None:
         raise HTTPException(
@@ -507,7 +511,8 @@ def register(payload: RegisterInput) -> dict[str, Any]:
 
 @app.post("/api/v1/auth/login", tags=["auth"], summary="Log in and receive a JWT")
 def login(form: OAuth2PasswordRequestForm = Depends()) -> dict[str, Any]:
-    user = next((u for u in _users if u["email"] == form.username), None)
+    username_clean = (form.username or "").strip().lower()
+    user = next((u for u in _users if u["email"].lower() == username_clean), None)
     if not user or not verify_password(form.password, user["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -526,13 +531,22 @@ def me(current: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @app.get("/api/v1/dashboard", tags=["dashboard"], summary="Get procurement dashboard")
-def dashboard(_: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
+def dashboard(current: Optional[dict[str, Any]] = Depends(get_current_user)) -> dict[str, Any]:
+    user_requests = _requests
+    user_approvals = _approvals
+    user_orders = _purchase_orders
+    
+    if current and current.get("role") == "employee":
+        user_requests = [r for r in _requests if r.get("requester") == current.get("name")]
+        user_approvals = []
+        user_orders = []
+        
     return {
         "metrics": {
-            "activeRequests": len(_requests),
-            "pendingApprovals": len([a for a in _approvals if a["status"] == "Pending"]),
-            "activeOrders": len(_purchase_orders),
-            "totalSpend": sum(o["amount"] for o in _purchase_orders),
+            "activeRequests": len(user_requests),
+            "pendingApprovals": len([a for a in user_approvals if a["status"] == "Pending"]),
+            "activeOrders": len(user_orders),
+            "totalSpend": sum(o["amount"] for o in user_orders),
         },
         "monthlySpend": [
             {"month": m, "amount": a}
@@ -578,12 +592,16 @@ def list_requests(
     search: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     page: int = Query(1, ge=1),
-    _: Optional[dict[str, Any]] = Depends(get_current_user),
+    current: Optional[dict[str, Any]] = Depends(get_current_user),
 ) -> dict[str, Any]:
+    # filter by owner if employee
+    if current and current.get("role") == "employee":
+        pass # Handled below
     items = [
         r for r in _requests
         if (not search or search.lower() in (r["title"] + r["requestNumber"] + r["department"]).lower())
         and (not status or r["status"].lower() == status.lower())
+        and (not current or current.get("role") != "employee" or r.get("requester") == current.get("name"))
     ]
     # Return without nested items for list view
     return {
@@ -628,8 +646,9 @@ def create_request(
 @app.get("/api/v1/purchase-requests/{id}", tags=["purchase-requests"], summary="Get purchase request details")
 def get_request(
     id: int,
-    _: Optional[dict[str, Any]] = Depends(get_current_user),
+    current: Optional[dict[str, Any]] = Depends(get_current_user),
 ) -> dict[str, Any]:
+    pass
     req = next((r for r in _requests if r["id"] == id), None)
     if not req:
         raise HTTPException(404, f"Purchase request {id} not found.")
@@ -677,8 +696,11 @@ def delete_request(id: int, _: dict[str, Any] = Depends(require_user)) -> None:
 
 # ── Approvals ─────────────────────────────────────────────────────────────────
 
-@app.get("/api/v1/approvals", tags=["approvals"], summary="List approval tasks")
-def list_approvals(_: Optional[dict[str, Any]] = Depends(get_current_user)) -> list[dict[str, Any]]:
+@app.get("/api/v1/approvals", tags=["approvals"], summary="List pending approvals")
+def list_approvals(current: Optional[dict[str, Any]] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    # In a real app, this would query by current user's approver role
+    if current and current.get("role") == "employee":
+        return [a for a in _approvals if a.get("requester") == current.get("name")]
     return _approvals
 
 
@@ -802,8 +824,9 @@ def create_vendor(
 @app.get("/api/v1/vendors/{id}", tags=["vendors"], summary="Get vendor details")
 def get_vendor(
     id: int,
-    _: Optional[dict[str, Any]] = Depends(get_current_user),
+    current: Optional[dict[str, Any]] = Depends(get_current_user),
 ) -> dict[str, Any]:
+    check_role(current, ["procurement_manager", "admin"])
     vendor = next((v for v in _vendors if v["id"] == id), None)
     if not vendor:
         raise HTTPException(404, f"Vendor {id} not found.")
@@ -849,8 +872,9 @@ def _vendor_public(v: dict[str, Any]) -> dict[str, Any]:
 @app.get("/api/v1/vendor-comparisons/{purchaseRequestId}", tags=["intelligence"], summary="Compare vendors for a purchase request")
 def comparison(
     purchaseRequestId: int,
-    _: Optional[dict[str, Any]] = Depends(get_current_user),
+    current: Optional[dict[str, Any]] = Depends(get_current_user),
 ) -> dict[str, Any]:
+    check_role(current, ["procurement_manager", "admin"])
     req = next((r for r in _requests if r["id"] == purchaseRequestId), None)
     req_number = req["requestNumber"] if req else f"PR-{purchaseRequestId}"
     return {
@@ -867,8 +891,9 @@ def comparison(
 @app.get("/api/v1/decision-twin/{purchaseRequestId}", tags=["intelligence"], summary="Simulate procurement outcomes (Decision Twin)")
 def decision_twin(
     purchaseRequestId: int,
-    _: Optional[dict[str, Any]] = Depends(get_current_user),
+    current: Optional[dict[str, Any]] = Depends(get_current_user),
 ) -> dict[str, Any]:
+    check_role(current, ["procurement_manager", "admin"])
     req = next((r for r in _requests if r["id"] == purchaseRequestId), None)
     req_number = req["requestNumber"] if req else f"PR-{purchaseRequestId}"
     analyses = _decision_twin_analyses()
@@ -890,15 +915,21 @@ def decision_twin(
 @app.post("/api/v1/decision-twin/analyze/{purchaseRequestId}", tags=["intelligence"], summary="Re-run Decision Twin analysis")
 def rerun_decision_twin(
     purchaseRequestId: int,
-    _: dict[str, Any] = Depends(require_user),
+    current: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
+    check_role(current, ["procurement_manager", "admin"])
     return decision_twin(purchaseRequestId)
 
 
 # ── Purchase orders ───────────────────────────────────────────────────────────
 
-@app.get("/api/v1/purchase-orders", tags=["purchase-orders"], summary="List purchase orders")
-def list_purchase_orders(_: Optional[dict[str, Any]] = Depends(get_current_user)) -> list[dict[str, Any]]:
+@app.get("/api/v1/purchase-orders", tags=["orders"], summary="List purchase orders")
+def list_purchase_orders(current: Optional[dict[str, Any]] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    if current and current.get("role") == "employee":
+        # Usually POs are linked to PRs, for demo we just filter if needed, 
+        # but let's filter if there's a requester match (if we add it to POs)
+        return [] # Employees don't own POs directly in this mock unless added
+    check_role(current, ["procurement_manager", "approver", "admin"])
     return [{k: v for k, v in o.items() if k not in {"items", "timeline"}} for o in _purchase_orders]
 
 
@@ -907,6 +938,7 @@ def create_purchase_order(
     payload: PurchaseOrderInput,
     current: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
+    check_role(current, ["procurement_manager", "admin"])
     vendor = next((v for v in _vendors if v["id"] == payload.vendorId), _vendors[0])
     req = next((r for r in _requests if r["id"] == payload.purchaseRequestId), _requests[0])
     new_id = max(o["id"] for o in _purchase_orders) + 1
@@ -934,8 +966,9 @@ def create_purchase_order(
 @app.get("/api/v1/purchase-orders/{id}", tags=["purchase-orders"], summary="Get purchase order detail")
 def get_purchase_order(
     id: int,
-    _: Optional[dict[str, Any]] = Depends(get_current_user),
+    current: Optional[dict[str, Any]] = Depends(get_current_user),
 ) -> dict[str, Any]:
+    check_role(current, ["procurement_manager", "approver", "admin"])
     order = next((o for o in _purchase_orders if o["id"] == id), None)
     if not order:
         raise HTTPException(404, f"Purchase order {id} not found.")
@@ -946,8 +979,9 @@ def get_purchase_order(
 def update_purchase_order(
     id: int,
     payload: dict[str, Any],
-    _: dict[str, Any] = Depends(require_user),
+    current: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
+    check_role(current, ["procurement_manager", "approver", "admin"])
     order = next((o for o in _purchase_orders if o["id"] == id), None)
     if not order:
         raise HTTPException(404, f"Purchase order {id} not found.")
@@ -959,7 +993,8 @@ def update_purchase_order(
 # ── Order tracking ────────────────────────────────────────────────────────────
 
 @app.get("/api/v1/order-tracking", tags=["order-tracking"], summary="Get active order tracking")
-def tracking(_: Optional[dict[str, Any]] = Depends(get_current_user)) -> list[dict[str, Any]]:
+def tracking(current: Optional[dict[str, Any]] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    check_role(current, ["procurement_manager", "approver", "employee", "admin"])
     return [
         {
             "id": o["id"],
@@ -978,8 +1013,9 @@ def tracking(_: Optional[dict[str, Any]] = Depends(get_current_user)) -> list[di
 def update_tracking(
     purchase_order_id: int,
     payload: dict[str, Any],
-    _: dict[str, Any] = Depends(require_user),
+    current: dict[str, Any] = Depends(require_user),
 ) -> dict[str, Any]:
+    check_role(current, ["procurement_manager", "admin"])
     order = next((o for o in _purchase_orders if o["id"] == purchase_order_id), None)
     if not order:
         raise HTTPException(404, f"Purchase order {purchase_order_id} not found.")
@@ -999,7 +1035,8 @@ def update_tracking(
 # ── Vendor performance ────────────────────────────────────────────────────────
 
 @app.get("/api/v1/vendor-performance", tags=["vendor-performance"], summary="Get vendor performance rankings")
-def vendor_performance(_: Optional[dict[str, Any]] = Depends(get_current_user)) -> list[dict[str, Any]]:
+def vendor_performance(current: Optional[dict[str, Any]] = Depends(get_current_user)) -> list[dict[str, Any]]:
+    check_role(current, ["procurement_manager", "admin"])
     return [
         {
             "vendorId": v["id"],
@@ -1019,8 +1056,9 @@ def vendor_performance(_: Optional[dict[str, Any]] = Depends(get_current_user)) 
 @app.get("/api/v1/vendor-performance/{vendor_id}", tags=["vendor-performance"], summary="Get individual vendor performance")
 def single_vendor_performance(
     vendor_id: int,
-    _: Optional[dict[str, Any]] = Depends(get_current_user),
+    current: Optional[dict[str, Any]] = Depends(get_current_user),
 ) -> dict[str, Any]:
+    check_role(current, ["procurement_manager", "admin"])
     vendor = next((v for v in _vendors if v["id"] == vendor_id), None)
     if not vendor:
         raise HTTPException(404, f"Vendor {vendor_id} not found.")
