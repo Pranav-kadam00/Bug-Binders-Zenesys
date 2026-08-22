@@ -1,7 +1,7 @@
 import type { DiscoveryRequest, DiscoveryResponse } from "../types/vendorDiscovery.types";
 
 export async function discoverBulkVendors(request: DiscoveryRequest): Promise<DiscoveryResponse> {
-  const response = await fetch("/api/v1/vendors/discover", {
+  const response = await fetch("/api/v1/vendors/bulk-discover", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(request),
