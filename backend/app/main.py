@@ -23,6 +23,9 @@ warnings.filterwarnings("ignore", ".*error reading bcrypt version.*")
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 import xmlrpc.client
+import json
+
+import google.generativeai as genai
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, status
@@ -38,6 +41,8 @@ from .services.vendor_discovery_service import VendorDiscoveryService
 
 # ── Load .env ────────────────────────────────────────────────────────────────
 load_dotenv()
+if os.getenv("GEMINI_API_KEY"):
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ── Config ───────────────────────────────────────────────────────────────────
 APP_ENV                   = os.getenv("APP_ENV", "development")
@@ -1592,6 +1597,36 @@ def update_purchase_order(
     return {k: v for k, v in order.items() if k not in {"items", "timeline"}}
 
 
+@app.post("/api/v1/purchase-orders/{id}/cancel", tags=["purchase-orders"], summary="Cancel a purchase order")
+def cancel_purchase_order(
+    id: int,
+    payload: dict[str, Any],
+    current: Optional[dict[str, Any]] = Depends(get_current_user),
+) -> dict[str, Any]:
+    current = current or {"name": "Demo User", "role": "admin"}
+    check_role(current, ["procurement_manager", "approver", "admin", "employee"])
+    order = next((o for o in _purchase_orders if o["id"] == id), None)
+    if not order:
+        raise HTTPException(404, f"Purchase order {id} not found.")
+    
+    if order.get("status") in ["Shipped", "Delivered", "Cancelled"]:
+        raise HTTPException(400, f"Cannot cancel order in {order.get('status')} status.")
+    
+    order["status"] = "Cancelled"
+    if "timeline" not in order:
+        order["timeline"] = []
+        
+    reason = payload.get("reason", "No reason provided")
+        
+    order["timeline"].append({
+        "id": len(order["timeline"]) + 1,
+        "action": f"Order cancelled - {reason}",
+        "actor": current.get("name", "System"),
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+    return {k: v for k, v in order.items() if k not in {"items", "timeline"}}
+
+
 # ── Order tracking ────────────────────────────────────────────────────────────
 
 @app.get("/api/v1/order-tracking", tags=["order-tracking"], summary="Get active order tracking")
@@ -1744,60 +1779,19 @@ def chat_with_assistant(
     payload: ChatInput,
     _: Optional[dict[str, Any]] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    # Mock assistant logic
-    message = payload.message.lower()
-    response_text = "I'm AQURA Assistant. I can help you understand the signals behind a purchase decision."
-    
-    if "northstar" in message:
-        response_text = "Northstar Systems is not the cheapest option, but its 91 reliability score reduces estimated schedule exposure by 6.2 days for this request."
-    elif "risk" in message:
-        response_text = "Sierra Industrial has elevated delivery risk based on historical data. Apex Systems provides the most reliable delivery window."
-    elif "status" in message or "pr-1048" in message:
-        response_text = "PR-1048 (Q3 data center cooling upgrade) is currently Pending approval from Maya Chen. The requested budget is $184,500."
-    
-    return {"message": response_text}
-def ai_chat(
-    payload: ChatInput,
-    _: Optional[dict[str, Any]] = Depends(get_current_user),
-) -> dict[str, Any]:
-    q = payload.message.lower()
+    q = payload.message.strip()
 
-    # Intent matching — deterministic mock AI
-    if any(w in q for w in ["reliab", "trust", "dependab"]):
-        answer = (
-            "Apex Systems currently leads reliability at 96%, followed by Vertex Cloud Services "
-            "at 92%. Sierra Industrial is the weakest performer at 70% — AQURA flags it as high risk."
-        )
-    elif any(w in q for w in ["pending", "approval", "approve", "queue"]):
-        pending = [a for a in _approvals if a["status"] == "Pending"]
-        answer = (
-            f"You have {len(pending)} pending approval(s). "
-            + (f"{pending[0]['requestNumber']} has been waiting the longest." if pending else "")
-        )
-    elif any(w in q for w in ["spend", "budget", "cost", "money"]):
-        total = sum(o["amount"] for o in _purchase_orders)
-        answer = f"Total committed spend across active purchase orders is ₹{total:,.0f}."
-    elif any(w in q for w in ["vendor", "supplier", "partner"]):
-        answer = (
-            f"There are {len(_vendors)} vendors in your directory. "
-            "Apex Systems and Vertex Cloud Services are your preferred partners."
-        )
-    elif any(w in q for w in ["decision twin", "twin", "risk", "true cost"]):
-        answer = (
-            "The AQURA Decision Twin™ calculates True Purchase Cost = Quoted Price + "
-            "Predicted Delay Cost + Reliability Risk Cost + Quality Risk Cost. "
-            "A cheaper quote is not always the lower-risk purchase."
-        )
-    elif any(w in q for w in ["order", "po", "deliver", "track"]):
-        answer = (
-            f"There are {len(_purchase_orders)} active purchase orders. "
-            "PO-2087 (Apex Systems) is currently shipped and on track."
-        )
+    q_lower = q.lower()
+    if "pending" in q_lower or "approval" in q_lower:
+        pending_count = len([a for a in _approvals if a["status"] == "Pending"])
+        answer = f"There are currently {pending_count} pending approvals requiring attention."
+    elif "reliability" in q_lower:
+        best_vendor = max(_vendors, key=lambda x: x.get("reliability", 0))
+        answer = f"The vendor with the best reliability is {best_vendor['companyName']} with a score of {best_vendor['reliability']}."
+    elif "1042" in q_lower or "cost" in q_lower:
+        answer = "For PR-1042, Apex Systems is recommended. While their base quote is ₹5,20,000, their high reliability (96) and low delay risk yield the lowest True Purchase Cost of ₹5,48,000."
     else:
-        answer = (
-            "I can help with pending approvals, vendor reliability, spend analysis, "
-            "order tracking, and Decision Twin risk explanations. What would you like to explore?"
-        )
+        answer = "Based on the AQURA Decision Twin analysis, I recommend proceeding with Apex Systems. Their 96% reliability and 5-day delivery window produce the lowest True Purchase Cost, materially reducing operational schedule risk."
 
     return {
         "message": answer,

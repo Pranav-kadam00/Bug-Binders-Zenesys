@@ -10,4 +10,5 @@ dependencies = [
     "python-dotenv>=1.2.3",
     "sqlalchemy>=2.0.52",
     "uvicorn>=0.52.4",
+    "google-generativeai>=0.8.2",
 ]
