@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Link, Route, Router as WouterRouter, Switch, useLocation, useParams } from "wouter";
 import {
   Activity, ArrowRight, ArrowUpRight, BarChart3, Bell, Building2, Check, CheckCircle2, ChevronDown,
@@ -18,7 +18,8 @@ import {
   useListApprovals, useListNotifications, useListPurchaseOrders, useListPurchaseRequests, useListVendors,
   useMarkAllNotificationsRead, useRejectRequest,
   useLogin,
-  setAuthTokenGetter
+  setAuthTokenGetter,
+  customFetch
 } from "@workspace/api-client-react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Toaster } from "@/components/ui/toaster";
@@ -653,7 +654,96 @@ function Comparison({ twin = false }: { twin?: boolean }) {
 
 function PurchaseOrders() { const q=useListPurchaseOrders({query:{queryKey:getListPurchaseOrdersQueryKey()}}); const createOrder=useCreatePurchaseOrder(); const rows:any[]=q.data??[{id:1,poNumber:"PO-2084",vendor:"Northstar Systems",requestNumber:"PR-1048",amount:184500,expectedDelivery:"2025-08-18",status:"In transit",createdAt:"2025-06-14"},{id:2,poNumber:"PO-2083",vendor:"Meridian Supply Co.",requestNumber:"PR-1042",amount:18600,expectedDelivery:"2025-07-02",status:"Confirmed",createdAt:"2025-06-12"}]; return <div className="p-5 lg:p-10"><PageHeader eyebrow="Committed decisions" title="Purchase orders" detail="Every order with its context still attached." action={<button onClick={()=>createOrder.mutate({data:{purchaseRequestId:1,vendorId:1}},{onSuccess:()=>q.refetch()})} disabled={createOrder.isPending} data-testid="button-create-purchase-order" className="rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground"><Plus className="mr-2 inline" size={16}/> New order</button>}/><Section title="All purchase orders"><div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead><tr className="border-b border-border text-[10px] uppercase tracking-[.13em] text-muted-foreground"><th className="px-5 py-3">Order</th><th className="px-3 py-3">Vendor</th><th className="px-3 py-3">Expected delivery</th><th className="px-3 py-3">Amount</th><th className="px-3 py-3">Status</th></tr></thead><tbody>{rows.map((o:any)=><Link key={o.id} href={`/purchase-orders/${o.id}`} data-testid={`row-order-${o.id}`} className="table-row border-b border-border/70 hover:bg-muted/50"><td className="px-5 py-4"><p className="font-mono text-xs font-bold">{o.poNumber}</p><p className="mt-1 text-[11px] text-muted-foreground">{o.requestNumber}</p></td><td className="px-3 py-4 text-sm font-semibold">{o.vendor}</td><td className="px-3 py-4 font-mono text-xs">{date(o.expectedDelivery)}</td><td className="px-3 py-4 font-mono text-sm font-bold">{money(o.amount)}</td><td className="px-3 py-4"><Badge tone={statusTone(o.status)}>{o.status}</Badge></td></Link>)}</tbody></table></div></Section></div>; }
 
-function OrderDetail() { const {id}=useParams(); const orderId=Number(id); const q=useGetPurchaseOrder(orderId,{query:{enabled:!!orderId,queryKey:getGetPurchaseOrderQueryKey(orderId)}}); if(q.isLoading)return <LoadingPage/>; if(q.isError)return <ErrorState retry={q.refetch}/>; const o:any=q.data??{poNumber:"PO-2084",vendor:"Northstar Systems",requestNumber:"PR-1048",amount:184500,expectedDelivery:"2025-08-18",status:"In transit",subtotal:184500,tax:0,riskLevel:"Low",items:[{id:1,itemName:"Cooling unit",quantity:4,unitPrice:28000,total:112000}],timeline:[]}; return <div className="p-5 lg:p-10"><Link href="/purchase-orders" data-testid="link-back-orders" className="mb-6 inline-flex items-center gap-1 text-xs font-bold text-muted-foreground"><ChevronLeft size={14}/> Purchase orders</Link><PageHeader eyebrow={o.poNumber} title={o.vendor} detail={`Linked to ${o.requestNumber}`} action={<Badge tone={statusTone(o.status)}>{o.status}</Badge>}/><div className="grid gap-6 lg:grid-cols-[1fr_.75fr]"><Section title="Order summary"><div className="grid gap-4 p-5 sm:grid-cols-3">{[["Total",money(o.amount)],["Expected delivery",date(o.expectedDelivery)],["Risk posture",o.riskLevel]].map(([l,v])=><div key={l} className="rounded-xl bg-muted/60 p-4"><p className="text-xs text-muted-foreground">{l}</p><p className="mt-2 font-mono text-lg font-bold">{v}</p></div>)}</div><div className="divide-y divide-border">{o.items.map((x:any)=><div key={x.id} className="flex justify-between px-5 py-4 text-sm"><span>{x.itemName} <span className="text-muted-foreground">× {x.quantity}</span></span><span className="font-mono font-bold">{money(x.total)}</span></div>)}</div></Section><Section title="Order timeline"><div className="space-y-6 p-5">{(o.timeline?.length?o.timeline:[{id:1,action:"Purchase order created",actor:"AQURA system",timestamp:o.createdAt},{id:2,action:"Vendor confirmed delivery window",actor:o.vendor,timestamp:"2025-06-15"}]).map((x:any)=><div key={x.id} className="flex gap-3"><div className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-primary"><Check size={14}/></div><div><p className="text-sm font-semibold">{x.action}</p><p className="mt-1 text-xs text-muted-foreground">{x.actor} · {date(x.timestamp)}</p></div></div>)}</div></Section></div></div>; }
+function OrderDetail() {
+  const { id } = useParams();
+  const orderId = Number(id);
+  const queryClient = useQueryClient();
+  const q = useGetPurchaseOrder(orderId, { query: { enabled: !!orderId, queryKey: getGetPurchaseOrderQueryKey(orderId) } });
+  
+  if (q.isLoading) return <LoadingPage />;
+  if (q.isError) return <ErrorState retry={q.refetch} />;
+  
+  const o: any = q.data ?? { poNumber: "PO-2084", vendor: "Northstar Systems", requestNumber: "PR-1048", amount: 184500, expectedDelivery: "2025-08-18", status: "In transit", subtotal: 184500, tax: 0, riskLevel: "Low", items: [{ id: 1, itemName: "Cooling unit", quantity: 4, unitPrice: 28000, total: 112000 }], timeline: [] };
+
+  const handleCancel = async () => {
+    const reason = window.prompt("Please provide a reason for cancellation:");
+    if (reason === null) return;
+    
+    try {
+      await customFetch(`/api/v1/purchase-orders/${orderId}/cancel`, { 
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason || "No reason provided" })
+      });
+      queryClient.invalidateQueries({ queryKey: getGetPurchaseOrderQueryKey(orderId) });
+    } catch(e) {
+      console.error(e);
+    }
+  };
+
+  const canCancel = o.status !== "Shipped" && o.status !== "Delivered" && o.status !== "Cancelled";
+
+  return (
+    <div className="p-5 lg:p-10">
+      <Link href="/purchase-orders" data-testid="link-back-orders" className="mb-6 inline-flex items-center gap-1 text-xs font-bold text-muted-foreground">
+        <ChevronLeft size={14} /> Purchase orders
+      </Link>
+      <PageHeader 
+        eyebrow={o.poNumber} 
+        title={o.vendor} 
+        detail={`Linked to ${o.requestNumber}`} 
+        action={
+          <div className="flex items-center gap-3">
+            {canCancel && (
+              <button 
+                onClick={handleCancel}
+                className="rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-500/20"
+              >
+                Cancel Order
+              </button>
+            )}
+            <Badge tone={statusTone(o.status)}>{o.status}</Badge>
+          </div>
+        } 
+      />
+      <div className="grid gap-6 lg:grid-cols-[1fr_.75fr]">
+        <Section title="Order summary">
+          <div className="grid gap-4 p-5 sm:grid-cols-3">
+            {[["Total", money(o.amount)], ["Expected delivery", date(o.expectedDelivery)], ["Risk posture", o.riskLevel]].map(([l, v]) => (
+              <div key={l} className="rounded-xl bg-muted/60 p-4">
+                <p className="text-xs text-muted-foreground">{l}</p>
+                <p className="mt-2 font-mono text-lg font-bold">{v}</p>
+              </div>
+            ))}
+          </div>
+          <div className="divide-y divide-border">
+            {o.items.map((x: any) => (
+              <div key={x.id} className="flex justify-between px-5 py-4 text-sm">
+                <span>{x.itemName} <span className="text-muted-foreground">× {x.quantity}</span></span>
+                <span className="font-mono font-bold">{money(x.total)}</span>
+              </div>
+            ))}
+          </div>
+        </Section>
+        <Section title="Order timeline">
+          <div className="space-y-6 p-5">
+            {(o.timeline?.length ? o.timeline : [{ id: 1, action: "Purchase order created", actor: "AQURA system", timestamp: o.createdAt }, { id: 2, action: "Vendor confirmed delivery window", actor: o.vendor, timestamp: "2025-06-15" }]).map((x: any) => (
+              <div key={x.id} className="flex gap-3">
+                <div className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-primary">
+                  <Check size={14} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold">{x.action}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{x.actor} · {date(x.timestamp)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      </div>
+    </div>
+  );
+}
 
 // ── Shipment tracking pipeline ───────────────────────────────────────────────
 const SHIPMENT_STAGES = [
