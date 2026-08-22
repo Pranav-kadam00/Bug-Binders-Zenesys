@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
-import type { Analytics, Approval, ApprovalAction, ChatInput, ChatResponse, Dashboard, DecisionTwin, DiscoverVendorsParams, HealthStatus, ListPurchaseRequestsParams, ListVendorsParams, Notification, PurchaseOrder, PurchaseOrderDetail, PurchaseOrderInput, PurchaseRequest, PurchaseRequestDetail, PurchaseRequestInput, PurchaseRequestList, TrackingItem, Vendor, VendorComparison, VendorDetail, VendorInput, VendorList, VendorPerformance } from './api.schemas';
+import type { Analytics, Approval, ApprovalAction, ChatInput, ChatResponse, ContactVendor200, ContactVendorBody, Dashboard, DecisionTwin, DiscoverVendorsParams, HealthStatus, ListPurchaseRequestsParams, ListVendorsParams, LoginBody, LoginResponse, Notification, PurchaseOrder, PurchaseOrderDetail, PurchaseOrderInput, PurchaseRequest, PurchaseRequestDetail, PurchaseRequestInput, PurchaseRequestList, TrackingItem, Vendor, VendorComparison, VendorDetail, VendorInput, VendorList, VendorPerformance } from './api.schemas';
 import { customFetch } from '../custom-fetch';
 import type { ErrorType, BodyType } from '../custom-fetch';
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -28,6 +28,33 @@ export declare function useHealthCheck<TData = Awaited<ReturnType<typeof healthC
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+export declare const getLoginUrl: () => string;
+/**
+ * @summary User login
+ */
+export declare const login: (loginBody: LoginBody, options?: Parameters<typeof customFetch>[1]) => Promise<LoginResponse>;
+export declare const getLoginMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof login>>, TError, {
+        data: BodyType<LoginBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof login>>, TError, {
+    data: BodyType<LoginBody>;
+}, TContext>;
+export type LoginMutationResult = NonNullable<Awaited<ReturnType<typeof login>>>;
+export type LoginMutationBody = BodyType<LoginBody>;
+export type LoginMutationError = ErrorType<unknown>;
+/**
+* @summary User login
+*/
+export declare const useLogin: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof login>>, TError, {
+        data: BodyType<LoginBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof login>>, TError, {
+    data: BodyType<LoginBody>;
+}, TContext>;
 export declare const getGetDashboardUrl: () => string;
 /**
  * @summary Get procurement dashboard
@@ -282,6 +309,37 @@ export declare function useGetVendor<TData = Awaited<ReturnType<typeof getVendor
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+export declare const getContactVendorUrl: (id: number) => string;
+/**
+ * @summary Contact a vendor
+ */
+export declare const contactVendor: (id: number, contactVendorBody: ContactVendorBody, options?: Parameters<typeof customFetch>[1]) => Promise<ContactVendor200>;
+export declare const getContactVendorMutationOptions: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof contactVendor>>, TError, {
+        id: number;
+        data: BodyType<ContactVendorBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof contactVendor>>, TError, {
+    id: number;
+    data: BodyType<ContactVendorBody>;
+}, TContext>;
+export type ContactVendorMutationResult = NonNullable<Awaited<ReturnType<typeof contactVendor>>>;
+export type ContactVendorMutationBody = BodyType<ContactVendorBody>;
+export type ContactVendorMutationError = ErrorType<unknown>;
+/**
+* @summary Contact a vendor
+*/
+export declare const useContactVendor: <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof contactVendor>>, TError, {
+        id: number;
+        data: BodyType<ContactVendorBody>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof contactVendor>>, TError, {
+    id: number;
+    data: BodyType<ContactVendorBody>;
+}, TContext>;
 export declare const getDiscoverVendorsUrl: (params?: DiscoverVendorsParams) => string;
 /**
  * @summary Discover vendors for a product

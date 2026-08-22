@@ -131,6 +131,15 @@ _users: list[dict[str, Any]] = [
         "department": "Operations",
         "createdAt": "2026-01-01",
     },
+    {
+        "id": 5,
+        "name": "Vendor Demo",
+        "email": "vendor@aqura.demo",
+        "hashed_password": _hashed_demo_pw,
+        "role": "vendor",
+        "department": "External",
+        "createdAt": "2026-01-01",
+    },
 ]
 
 _vendors: list[dict[str, Any]] = [
@@ -192,7 +201,7 @@ _requests: list[dict[str, Any]] = [
         "createdAt": "2026-08-19",
         "items": [
             {"id": 1, "itemName": "Business laptop 32GB", "description": "32 GB RAM, 14-inch, discrete GPU",
-             "category": "IT Hardware", "quantity": 20, "unit": "units",
+             "category": "IT Hardware", "itemType": "Product", "quantity": 20, "unit": "units",
              "estimatedUnitPrice": 24100.0, "total": 482000.0},
         ],
     },
@@ -206,7 +215,7 @@ _requests: list[dict[str, Any]] = [
         "createdAt": "2026-08-18",
         "items": [
             {"id": 1, "itemName": "Datadog APM — 40 services 1yr", "description": "",
-             "category": "Cloud Services", "quantity": 1, "unit": "license",
+             "category": "Cloud Services", "itemType": "Service", "quantity": 1, "unit": "license",
              "estimatedUnitPrice": 186000.0, "total": 186000.0},
         ],
     },
@@ -363,6 +372,10 @@ class ChatInput(BaseModel):
 class PurchaseOrderInput(BaseModel):
     purchaseRequestId: int
     vendorId: int
+
+
+class ContactVendorInput(BaseModel):
+    message: str = Field(min_length=1)
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
@@ -1138,6 +1151,22 @@ _CONVERSATIONS: list[dict[str, Any]] = []
 
 
 @app.post("/api/v1/ai/chat", tags=["ai"], summary="Ask AQURA Assistant")
+def chat_with_assistant(
+    payload: ChatInput,
+    _: Optional[dict[str, Any]] = Depends(get_current_user),
+) -> dict[str, Any]:
+    # Mock assistant logic
+    message = payload.message.lower()
+    response_text = "I'm AQURA Assistant. I can help you understand the signals behind a purchase decision."
+    
+    if "northstar" in message:
+        response_text = "Northstar Systems is not the cheapest option, but its 91 reliability score reduces estimated schedule exposure by 6.2 days for this request."
+    elif "risk" in message:
+        response_text = "Sierra Industrial has elevated delivery risk based on historical data. Apex Systems provides the most reliable delivery window."
+    elif "status" in message or "pr-1048" in message:
+        response_text = "PR-1048 (Q3 data center cooling upgrade) is currently Pending approval from Maya Chen. The requested budget is $184,500."
+    
+    return {"message": response_text}
 def ai_chat(
     payload: ChatInput,
     _: Optional[dict[str, Any]] = Depends(get_current_user),

@@ -25,12 +25,16 @@ import type {
   ApprovalAction,
   ChatInput,
   ChatResponse,
+  ContactVendor200,
+  ContactVendorBody,
   Dashboard,
   DecisionTwin,
   DiscoverVendorsParams,
   HealthStatus,
   ListPurchaseRequestsParams,
   ListVendorsParams,
+  LoginBody,
+  LoginResponse,
   Notification,
   PurchaseOrder,
   PurchaseOrderDetail,
@@ -151,6 +155,80 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
+
+export const getLoginUrl = () => {
+
+
+
+
+  return `/api/v1/auth/login`
+}
+
+/**
+ * @summary User login
+ */
+export const login = async (loginBody: LoginBody, options?: Parameters<typeof customFetch>[1]): Promise<LoginResponse> => {
+    const formUrlEncoded = new URLSearchParams();
+formUrlEncoded.append(`username`, loginBody.username);
+formUrlEncoded.append(`password`, loginBody.password);
+
+  return customFetch<LoginResponse>(getLoginUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...options?.headers },
+    body: formUrlEncoded
+  }
+);}
+
+
+
+
+
+export const getLoginMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,{data: BodyType<LoginBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,{data: BodyType<LoginBody>}, TContext> => {
+
+const mutationKey = ['login'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof login>>, {data: BodyType<LoginBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  login(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LoginMutationResult = NonNullable<Awaited<ReturnType<typeof login>>>
+    export type LoginMutationBody = BodyType<LoginBody>
+    export type LoginMutationError = ErrorType<unknown>
+
+    /**
+ * @summary User login
+ */
+export const useLogin = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof login>>, TError,{data: BodyType<LoginBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof login>>,
+        TError,
+        {data: BodyType<LoginBody>},
+        TContext
+      > => {
+      return useMutation(getLoginMutationOptions(options));
+    }
 
 export const getGetDashboardUrl = () => {
 
@@ -913,6 +991,78 @@ export function useGetVendor<TData = Awaited<ReturnType<typeof getVendor>>, TErr
 
 
 
+
+export const getContactVendorUrl = (id: number,) => {
+
+
+
+
+  return `/api/v1/vendors/${id}/contact`
+}
+
+/**
+ * @summary Contact a vendor
+ */
+export const contactVendor = async (id: number,
+    contactVendorBody: ContactVendorBody, options?: Parameters<typeof customFetch>[1]): Promise<ContactVendor200> => {
+
+  return customFetch<ContactVendor200>(getContactVendorUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(contactVendorBody)
+  }
+);}
+
+
+
+
+
+export const getContactVendorMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof contactVendor>>, TError,{id: number;data: BodyType<ContactVendorBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof contactVendor>>, TError,{id: number;data: BodyType<ContactVendorBody>}, TContext> => {
+
+const mutationKey = ['contactVendor'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof contactVendor>>, {id: number;data: BodyType<ContactVendorBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  contactVendor(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ContactVendorMutationResult = NonNullable<Awaited<ReturnType<typeof contactVendor>>>
+    export type ContactVendorMutationBody = BodyType<ContactVendorBody>
+    export type ContactVendorMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Contact a vendor
+ */
+export const useContactVendor = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof contactVendor>>, TError,{id: number;data: BodyType<ContactVendorBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof contactVendor>>,
+        TError,
+        {id: number;data: BodyType<ContactVendorBody>},
+        TContext
+      > => {
+      return useMutation(getContactVendorMutationOptions(options));
+    }
 
 export const getDiscoverVendorsUrl = (params?: DiscoverVendorsParams,) => {
   const normalizedParams = new URLSearchParams();

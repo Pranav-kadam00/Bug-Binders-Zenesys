@@ -17,6 +17,27 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary User login
+ */
+export const LoginBody = zod.object({
+  "username": zod.string(),
+  "password": zod.string()
+})
+
+export const LoginResponse = zod.object({
+  "access_token": zod.string(),
+  "token_type": zod.string(),
+  "user": zod.object({
+  "id": zod.int().optional(),
+  "name": zod.string().optional(),
+  "email": zod.string().optional(),
+  "role": zod.string().optional(),
+  "department": zod.string().optional()
+})
+})
+
+
+/**
  * @summary Get procurement dashboard
  */
 export const GetDashboardResponse = zod.object({
@@ -106,6 +127,7 @@ export const CreatePurchaseRequestBody = zod.object({
   "itemName": zod.string(),
   "description": zod.string().optional(),
   "category": zod.string().optional(),
+  "itemType": zod.enum(['Product', 'Service']).optional(),
   "quantity": zod.int().min(1),
   "unit": zod.string(),
   "estimatedUnitPrice": zod.number().min(createPurchaseRequestBodyItemsItemEstimatedUnitPriceMin)
@@ -155,6 +177,7 @@ export const GetPurchaseRequestResponse = zod.object({
   "itemName": zod.string(),
   "description": zod.string().optional(),
   "category": zod.string().optional(),
+  "itemType": zod.enum(['Product', 'Service']).optional(),
   "quantity": zod.int().min(1),
   "unit": zod.string(),
   "estimatedUnitPrice": zod.number().min(getPurchaseRequestResponseTwoItemsItemOneEstimatedUnitPriceMin)
@@ -340,6 +363,22 @@ export const GetVendorResponse = zod.object({
   "timestamp": zod.string()
 }))
 }))
+
+
+/**
+ * @summary Contact a vendor
+ */
+export const ContactVendorParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const ContactVendorBody = zod.object({
+  "message": zod.string()
+})
+
+export const ContactVendorResponse = zod.object({
+  "success": zod.boolean().optional()
+})
 
 
 /**
