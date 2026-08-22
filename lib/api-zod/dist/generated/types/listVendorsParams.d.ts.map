@@ -1,0 +1,1 @@
+{"version":3,"file":"listVendorsParams.d.ts","sourceRoot":"","sources":["../../../src/generated/types/listVendorsParams.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,aAAa,EAAE,MAAM,iBAAiB,CAAC;AACrD,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,mBAAmB,CAAC;AAEzD,MAAM,MAAM,iBAAiB,GAAG;IAChC,MAAM,CAAC,EAAE,eAAe,CAAC;IACzB;;OAEG;IACH,IAAI,CAAC,EAAE,aAAa,CAAC;CACpB,CAAC"}

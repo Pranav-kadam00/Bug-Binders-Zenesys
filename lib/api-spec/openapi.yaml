@@ -1,0 +1,753 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: AQURA procurement intelligence API
+servers:
+  - url: /api
+tags:
+  - name: health
+  - name: dashboard
+  - name: purchase-requests
+  - name: approvals
+  - name: vendors
+  - name: intelligence
+  - name: purchase-orders
+  - name: analytics
+  - name: notifications
+  - name: ai
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /v1/dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get procurement dashboard
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /v1/purchase-requests:
+    get:
+      operationId: listPurchaseRequests
+      tags: [purchase-requests]
+      summary: List purchase requests
+      parameters:
+        - { $ref: "#/components/parameters/Search" }
+        - { $ref: "#/components/parameters/Status" }
+        - { $ref: "#/components/parameters/Page" }
+      responses:
+        "200":
+          description: Purchase requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseRequestList"
+    post:
+      operationId: createPurchaseRequest
+      tags: [purchase-requests]
+      summary: Create a purchase request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseRequestInput"
+      responses:
+        "201":
+          description: Created request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseRequest"
+  /v1/purchase-requests/{id}:
+    get:
+      operationId: getPurchaseRequest
+      tags: [purchase-requests]
+      summary: Get purchase request details
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Request detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseRequestDetail"
+  /v1/approvals:
+    get:
+      operationId: listApprovals
+      tags: [approvals]
+      summary: List approval tasks
+      responses:
+        "200":
+          description: Approval tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Approval"
+  /v1/approvals/{id}/approve:
+    post:
+      operationId: approveRequest
+      tags: [approvals]
+      summary: Approve a request
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalAction"
+      responses:
+        "200":
+          description: Updated approval
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Approval"
+  /v1/approvals/{id}/reject:
+    post:
+      operationId: rejectRequest
+      tags: [approvals]
+      summary: Reject a request
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalAction"
+      responses:
+        "200":
+          description: Updated approval
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Approval"
+  /v1/vendors:
+    get:
+      operationId: listVendors
+      tags: [vendors]
+      summary: List vendors
+      parameters:
+        - { $ref: "#/components/parameters/Search" }
+        - { $ref: "#/components/parameters/Page" }
+      responses:
+        "200":
+          description: Vendors
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorList"
+    post:
+      operationId: createVendor
+      tags: [vendors]
+      summary: Create a vendor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VendorInput"
+      responses:
+        "201":
+          description: Created vendor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+  /v1/vendors/{id}:
+    get:
+      operationId: getVendor
+      tags: [vendors]
+      summary: Get vendor details
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Vendor detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorDetail"
+  /v1/vendors/discover:
+    get:
+      operationId: discoverVendors
+      tags: [vendors]
+      summary: Discover vendors for a product
+      parameters:
+        - { name: product, in: query, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Discovered vendors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vendor"
+  /v1/vendor-comparisons/{purchaseRequestId}:
+    get:
+      operationId: getVendorComparison
+      tags: [intelligence]
+      summary: Compare vendors for a purchase request
+      parameters:
+        - { $ref: "#/components/parameters/PurchaseRequestId" }
+      responses:
+        "200":
+          description: Vendor comparison
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VendorComparison"
+  /v1/decision-twin/{purchaseRequestId}:
+    get:
+      operationId: getDecisionTwin
+      tags: [intelligence]
+      summary: Simulate procurement outcomes
+      parameters:
+        - { $ref: "#/components/parameters/PurchaseRequestId" }
+      responses:
+        "200":
+          description: Decision Twin analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionTwin"
+  /v1/purchase-orders:
+    get:
+      operationId: listPurchaseOrders
+      tags: [purchase-orders]
+      summary: List purchase orders
+      responses:
+        "200":
+          description: Purchase orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PurchaseOrder"
+    post:
+      operationId: createPurchaseOrder
+      tags: [purchase-orders]
+      summary: Create a purchase order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PurchaseOrderInput"
+      responses:
+        "201":
+          description: Created purchase order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+  /v1/purchase-orders/{id}:
+    get:
+      operationId: getPurchaseOrder
+      tags: [purchase-orders]
+      summary: Get purchase order detail
+      parameters:
+        - { $ref: "#/components/parameters/Id" }
+      responses:
+        "200":
+          description: Purchase order detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrderDetail"
+  /v1/order-tracking:
+    get:
+      operationId: getOrderTracking
+      tags: [purchase-orders]
+      summary: Get active order tracking
+      responses:
+        "200":
+          description: Tracking items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrackingItem"
+  /v1/vendor-performance:
+    get:
+      operationId: getVendorPerformance
+      tags: [analytics]
+      summary: Get vendor performance rankings
+      responses:
+        "200":
+          description: Performance data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VendorPerformance"
+  /v1/analytics:
+    get:
+      operationId: getAnalytics
+      tags: [analytics]
+      summary: Get analytics
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Analytics"
+  /v1/notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List notifications
+      responses:
+        "200":
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+  /v1/notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark notifications read
+      responses:
+        "200":
+          description: Updated notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+  /v1/ai/chat:
+    post:
+      operationId: chatWithAssistant
+      tags: [ai]
+      summary: Ask AQURA Assistant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatInput"
+      responses:
+        "200":
+          description: Assistant response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatResponse"
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+    PurchaseRequestId:
+      name: purchaseRequestId
+      in: path
+      required: true
+      schema: { type: integer }
+    Search:
+      name: search
+      in: query
+      schema: { type: string }
+    Status:
+      name: status
+      in: query
+      schema: { type: string }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+    Dashboard:
+      type: object
+      required: [metrics, monthlySpend, requestsByStatus, recentRequests, insights]
+      properties:
+        metrics:
+          type: object
+          required: [activeRequests, pendingApprovals, activeOrders, totalSpend]
+          properties:
+            activeRequests: { type: integer }
+            pendingApprovals: { type: integer }
+            activeOrders: { type: integer }
+            totalSpend: { type: number }
+        monthlySpend:
+          type: array
+          items:
+            type: object
+            required: [month, amount]
+            properties:
+              month: { type: string }
+              amount: { type: number }
+        requestsByStatus:
+          type: array
+          items:
+            type: object
+            required: [status, count]
+            properties:
+              status: { type: string }
+              count: { type: integer }
+        recentRequests:
+          type: array
+          items: { $ref: "#/components/schemas/PurchaseRequest" }
+        insights:
+          type: array
+          items: { $ref: "#/components/schemas/Insight" }
+    Insight:
+      type: object
+      required: [id, kind, title, detail, tone]
+      properties:
+        id: { type: integer }
+        kind: { type: string }
+        title: { type: string }
+        detail: { type: string }
+        tone: { type: string }
+    PurchaseRequest:
+      type: object
+      required: [id, requestNumber, title, department, requester, priority, budget, requiredDate, status, createdAt]
+      properties:
+        id: { type: integer }
+        requestNumber: { type: string }
+        title: { type: string }
+        department: { type: string }
+        requester: { type: string }
+        priority: { type: string }
+        budget: { type: number }
+        requiredDate: { type: string }
+        status: { type: string }
+        createdAt: { type: string }
+    PurchaseRequestInput:
+      type: object
+      required: [title, department, priority, requiredDate, items]
+      properties:
+        title: { type: string, minLength: 1 }
+        description: { type: string }
+        department: { type: string }
+        priority: { type: string }
+        requiredDate: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RequestItemInput" }
+    RequestItemInput:
+      type: object
+      required: [itemName, quantity, unit, estimatedUnitPrice]
+      properties:
+        itemName: { type: string }
+        description: { type: string }
+        category: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        unit: { type: string }
+        estimatedUnitPrice: { type: number, minimum: 0 }
+    PurchaseRequestDetail:
+      allOf:
+        - $ref: "#/components/schemas/PurchaseRequest"
+        - type: object
+          required: [description, items, approvals, activity]
+          properties:
+            description: { type: string }
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/RequestItem" }
+            approvals:
+              type: array
+              items: { $ref: "#/components/schemas/Approval" }
+            activity:
+              type: array
+              items: { $ref: "#/components/schemas/Activity" }
+    RequestItem:
+      allOf:
+        - $ref: "#/components/schemas/RequestItemInput"
+        - type: object
+          required: [id, total]
+          properties:
+            id: { type: integer }
+            total: { type: number }
+    Approval:
+      type: object
+      required: [id, requestNumber, title, requester, amount, status, approver, level, createdAt]
+      properties:
+        id: { type: integer }
+        requestNumber: { type: string }
+        title: { type: string }
+        requester: { type: string }
+        amount: { type: number }
+        status: { type: string }
+        approver: { type: string }
+        level: { type: integer }
+        comment: { type: ["string", "null"] }
+        createdAt: { type: string }
+    ApprovalAction:
+      type: object
+      properties:
+        comment: { type: string }
+    Activity:
+      type: object
+      required: [id, action, actor, timestamp]
+      properties:
+        id: { type: integer }
+        action: { type: string }
+        actor: { type: string }
+        timestamp: { type: string }
+    Vendor:
+      type: object
+      required: [id, companyName, category, location, rating, performance, status, reliability]
+      properties:
+        id: { type: integer }
+        companyName: { type: string }
+        category: { type: string }
+        location: { type: string }
+        rating: { type: number }
+        performance: { type: number }
+        status: { type: string }
+        reliability: { type: number }
+        contactPerson: { type: string }
+        email: { type: string }
+    VendorInput:
+      type: object
+      required: [companyName, category, location]
+      properties:
+        companyName: { type: string }
+        category: { type: string }
+        location: { type: string }
+        contactPerson: { type: string }
+        email: { type: string }
+    VendorDetail:
+      allOf:
+        - $ref: "#/components/schemas/Vendor"
+        - type: object
+          required: [address, website, totalOrders, metrics, recentActivity]
+          properties:
+            address: { type: string }
+            website: { type: string }
+            totalOrders: { type: integer }
+            metrics:
+              type: array
+              items: { $ref: "#/components/schemas/VendorMetric" }
+            recentActivity:
+              type: array
+              items: { $ref: "#/components/schemas/Activity" }
+    VendorMetric:
+      type: object
+      required: [label, value, change]
+      properties:
+        label: { type: string }
+        value: { type: number }
+        change: { type: number }
+    VendorComparison:
+      type: object
+      required: [requestNumber, vendors, recommendedVendorId, riskReduction, confidence]
+      properties:
+        requestNumber: { type: string }
+        vendors:
+          type: array
+          items: { $ref: "#/components/schemas/VendorOption" }
+        recommendedVendorId: { type: integer }
+        riskReduction: { type: number }
+        confidence: { type: number }
+    VendorOption:
+      type: object
+      required: [vendorId, vendorName, quotedPrice, deliveryDays, pricingScore, deliveryScore, reliability, performance, overallScore, rank]
+      properties:
+        vendorId: { type: integer }
+        vendorName: { type: string }
+        quotedPrice: { type: number }
+        deliveryDays: { type: integer }
+        pricingScore: { type: number }
+        deliveryScore: { type: number }
+        reliability: { type: number }
+        performance: { type: number }
+        overallScore: { type: number }
+        rank: { type: integer }
+    DecisionTwin:
+      type: object
+      required: [requestNumber, analyses, recommendedVendorId, riskReduction, confidence, recommendation, explanation]
+      properties:
+        requestNumber: { type: string }
+        analyses:
+          type: array
+          items: { $ref: "#/components/schemas/DecisionAnalysis" }
+        recommendedVendorId: { type: integer }
+        riskReduction: { type: number }
+        confidence: { type: number }
+        recommendation: { type: string }
+        explanation: { type: string }
+    DecisionAnalysis:
+      type: object
+      required: [vendorId, vendorName, purchaseCost, deliveryDays, reliability, delayRisk, businessImpact, truePurchaseCost, confidence, riskLevel, recommendation]
+      properties:
+        vendorId: { type: integer }
+        vendorName: { type: string }
+        purchaseCost: { type: number }
+        deliveryDays: { type: integer }
+        reliability: { type: number }
+        delayRisk: { type: number }
+        businessImpact: { type: number }
+        truePurchaseCost: { type: number }
+        confidence: { type: number }
+        riskLevel: { type: string }
+        recommendation: { type: string }
+    PurchaseOrder:
+      type: object
+      required: [id, poNumber, vendor, requestNumber, amount, expectedDelivery, status, createdAt]
+      properties:
+        id: { type: integer }
+        poNumber: { type: string }
+        vendor: { type: string }
+        requestNumber: { type: string }
+        amount: { type: number }
+        expectedDelivery: { type: string }
+        status: { type: string }
+        createdAt: { type: string }
+    PurchaseOrderInput:
+      type: object
+      required: [purchaseRequestId, vendorId]
+      properties:
+        purchaseRequestId: { type: integer }
+        vendorId: { type: integer }
+    PurchaseOrderDetail:
+      allOf:
+        - $ref: "#/components/schemas/PurchaseOrder"
+        - type: object
+          required: [items, subtotal, tax, timeline, riskLevel]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/OrderItem" }
+            subtotal: { type: number }
+            tax: { type: number }
+            riskLevel: { type: string }
+            timeline:
+              type: array
+              items: { $ref: "#/components/schemas/Activity" }
+    OrderItem:
+      type: object
+      required: [id, itemName, quantity, unitPrice, total]
+      properties:
+        id: { type: integer }
+        itemName: { type: string }
+        quantity: { type: integer }
+        unitPrice: { type: number }
+        total: { type: number }
+    TrackingItem:
+      type: object
+      required: [id, poNumber, vendor, status, expectedDelivery, lastUpdate, delayRisk]
+      properties:
+        id: { type: integer }
+        poNumber: { type: string }
+        vendor: { type: string }
+        status: { type: string }
+        expectedDelivery: { type: string }
+        lastUpdate: { type: string }
+        delayRisk: { type: string }
+    VendorPerformance:
+      type: object
+      required: [vendorId, vendorName, onTimeRate, avgDeliveryDays, priceCompetitiveness, accuracy, reliability, quality, overall]
+      properties:
+        vendorId: { type: integer }
+        vendorName: { type: string }
+        onTimeRate: { type: number }
+        avgDeliveryDays: { type: number }
+        priceCompetitiveness: { type: number }
+        accuracy: { type: number }
+        reliability: { type: number }
+        quality: { type: number }
+        overall: { type: number }
+    Analytics:
+      type: object
+      required: [monthlySpend, categorySpend, processingTime, approvalTime, completionRate]
+      properties:
+        monthlySpend:
+          type: array
+          items:
+            type: object
+            required: [month, amount]
+            properties:
+              month: { type: string }
+              amount: { type: number }
+        categorySpend:
+          type: array
+          items:
+            type: object
+            required: [category, amount]
+            properties:
+              category: { type: string }
+              amount: { type: number }
+        processingTime: { type: number }
+        approvalTime: { type: number }
+        completionRate: { type: number }
+    Notification:
+      type: object
+      required: [id, title, message, type, isRead, createdAt]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        message: { type: string }
+        type: { type: string }
+        isRead: { type: boolean }
+        createdAt: { type: string }
+    ChatInput:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1 }
+    ChatResponse:
+      type: object
+      required: [message, suggestions]
+      properties:
+        message: { type: string }
+        suggestions:
+          type: array
+          items: { type: string }
+        context:
+          type: ["string", "null"]
+    PurchaseRequestList:
+      type: object
+      required: [items, total, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PurchaseRequest" }
+        total: { type: integer }
+        page: { type: integer }
+    VendorList:
+      type: object
+      required: [items, total, page]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Vendor" }
+        total: { type: integer }
+        page: { type: integer }

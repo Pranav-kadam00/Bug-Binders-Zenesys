@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "AQURA Procurement Intelligence"
+description = "An enterprise procurement intelligence workspace that helps teams create purchase requests, compare vendors, simulate risk with the AQURA Decision Twin, and track purchase orders."
+version = "1.0.0"
+id = "artifacts/aqura"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19341
+
+[services.development]
+run = "pnpm --filter @workspace/aqura run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/aqura", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/aqura/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19341"
+BASE_PATH = "/"
