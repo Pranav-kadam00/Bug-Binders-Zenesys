@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 import { useDiscoverBulkVendors } from "@workspace/api-client-react";
+import { formatCurrency, formatIndianNumber } from "@/lib/currency";
 import type { DiscoveryResponse } from "../types/vendorDiscovery.types";
 
 // ── Radius options ─────────────────────────────────────────────────────────────
