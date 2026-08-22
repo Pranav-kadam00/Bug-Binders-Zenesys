@@ -1,5 +1,5 @@
 import type { QueryKey, UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from '@tanstack/react-query';
-import type { Analytics, Approval, ApprovalAction, ChatInput, ChatResponse, ContactVendor200, ContactVendorBody, Dashboard, DecisionTwin, DiscoverVendorsParams, HealthStatus, ListPurchaseRequestsParams, ListVendorsParams, LoginBody, LoginResponse, Notification, PurchaseOrder, PurchaseOrderDetail, PurchaseOrderInput, PurchaseRequest, PurchaseRequestDetail, PurchaseRequestInput, PurchaseRequestList, TrackingItem, Vendor, VendorComparison, VendorDetail, VendorInput, VendorList, VendorPerformance } from './api.schemas';
+import type { Analytics, Approval, ApprovalAction, ChatInput, ChatResponse, Dashboard, DecisionTwin, DiscoverVendorsParams, HealthStatus, ListPurchaseRequestsParams, ListVendorsParams, Notification, PurchaseOrder, PurchaseOrderDetail, PurchaseOrderInput, PurchaseRequest, PurchaseRequestDetail, PurchaseRequestInput, PurchaseRequestList, TrackingItem, Vendor, VendorComparison, VendorDetail, VendorDiscoveryRequest, VendorDiscoveryResponse, VendorInput, VendorList, VendorPerformance } from './api.schemas';
 import { customFetch } from '../custom-fetch';
 import type { ErrorType, BodyType } from '../custom-fetch';
 type AwaitedInput<T> = PromiseLike<T> | T;
@@ -363,6 +363,33 @@ export declare function useDiscoverVendors<TData = Awaited<ReturnType<typeof dis
 }): UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
 };
+export declare const getDiscoverBulkVendorsUrl: () => string;
+/**
+ * @summary Discover qualified vendors for a bulk order
+ */
+export declare const discoverBulkVendors: (vendorDiscoveryRequest: VendorDiscoveryRequest, options?: Parameters<typeof customFetch>[1]) => Promise<VendorDiscoveryResponse>;
+export declare const getDiscoverBulkVendorsMutationOptions: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof discoverBulkVendors>>, TError, {
+        data: BodyType<VendorDiscoveryRequest>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationOptions<Awaited<ReturnType<typeof discoverBulkVendors>>, TError, {
+    data: BodyType<VendorDiscoveryRequest>;
+}, TContext>;
+export type DiscoverBulkVendorsMutationResult = NonNullable<Awaited<ReturnType<typeof discoverBulkVendors>>>;
+export type DiscoverBulkVendorsMutationBody = BodyType<VendorDiscoveryRequest>;
+export type DiscoverBulkVendorsMutationError = ErrorType<void>;
+/**
+* @summary Discover qualified vendors for a bulk order
+*/
+export declare const useDiscoverBulkVendors: <TError = ErrorType<void>, TContext = unknown>(options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof discoverBulkVendors>>, TError, {
+        data: BodyType<VendorDiscoveryRequest>;
+    }, TContext>;
+    request?: SecondParameter<typeof customFetch>;
+}) => UseMutationResult<Awaited<ReturnType<typeof discoverBulkVendors>>, TError, {
+    data: BodyType<VendorDiscoveryRequest>;
+}, TContext>;
 export declare const getGetVendorComparisonUrl: (purchaseRequestId: number) => string;
 /**
  * @summary Compare vendors for a purchase request

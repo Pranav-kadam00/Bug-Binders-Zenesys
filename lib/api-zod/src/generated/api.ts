@@ -405,6 +405,68 @@ export const DiscoverVendorsResponse = zod.array(DiscoverVendorsResponseItem)
 
 
 /**
+ * @summary Discover qualified vendors for a bulk order
+ */
+
+export const discoverBulkVendorsBodyRequiredQuantityExclusiveMin = 0;
+
+
+export const discoverBulkVendorsBodyLocationLatitudeMin = -90;
+export const discoverBulkVendorsBodyLocationLatitudeMax = 90;
+
+export const discoverBulkVendorsBodyLocationLongitudeMin = -180;
+export const discoverBulkVendorsBodyLocationLongitudeMax = 180;
+
+export const discoverBulkVendorsBodyInitialRadiusKmDefault = 10;
+export const discoverBulkVendorsBodyInitialRadiusKmExclusiveMin = 0;
+
+export const discoverBulkVendorsBodyMaximumRadiusKmDefault = 100;
+export const discoverBulkVendorsBodyMaximumRadiusKmExclusiveMin = 0;
+export const discoverBulkVendorsBodyMaximumRadiusKmMax = 500;
+
+export const discoverBulkVendorsBodyAutoExpandRadiusDefault = true;
+export const discoverBulkVendorsBodyMinimumVendorResultsDefault = 5;
+export const discoverBulkVendorsBodyMinimumVendorResultsMax = 100;
+
+export const discoverBulkVendorsBodyAllowPartialFulfillmentDefault = false;
+export const discoverBulkVendorsBodySortPreferenceDefault = `recommended`;
+
+export const DiscoverBulkVendorsBody = zod.object({
+  "productName": zod.string().min(1),
+  "category": zod.string().optional(),
+  "requiredQuantity": zod.number().gt(discoverBulkVendorsBodyRequiredQuantityExclusiveMin),
+  "unit": zod.string().min(1),
+  "location": zod.object({
+  "address": zod.string().optional(),
+  "city": zod.string().optional(),
+  "pincode": zod.string().optional(),
+  "latitude": zod.number().min(discoverBulkVendorsBodyLocationLatitudeMin).max(discoverBulkVendorsBodyLocationLatitudeMax).optional(),
+  "longitude": zod.number().min(discoverBulkVendorsBodyLocationLongitudeMin).max(discoverBulkVendorsBodyLocationLongitudeMax).optional()
+}),
+  "initialRadiusKm": zod.number().gt(discoverBulkVendorsBodyInitialRadiusKmExclusiveMin).default(discoverBulkVendorsBodyInitialRadiusKmDefault),
+  "maximumRadiusKm": zod.number().gt(discoverBulkVendorsBodyMaximumRadiusKmExclusiveMin).max(discoverBulkVendorsBodyMaximumRadiusKmMax).default(discoverBulkVendorsBodyMaximumRadiusKmDefault),
+  "autoExpandRadius": zod.boolean().default(discoverBulkVendorsBodyAutoExpandRadiusDefault),
+  "minimumVendorResults": zod.int().min(1).max(discoverBulkVendorsBodyMinimumVendorResultsMax).default(discoverBulkVendorsBodyMinimumVendorResultsDefault),
+  "allowPartialFulfillment": zod.boolean().default(discoverBulkVendorsBodyAllowPartialFulfillmentDefault),
+  "sortPreference": zod.enum(['recommended', 'price', 'distance', 'delivery', 'reliability']).default(discoverBulkVendorsBodySortPreferenceDefault)
+})
+
+export const DiscoverBulkVendorsResponse = zod.object({
+  "success": zod.boolean(),
+  "message": zod.string(),
+  "data": zod.object({
+  "search": zod.record(zod.string(), zod.unknown()),
+  "buyer_location": zod.record(zod.string(), zod.unknown()),
+  "radius_search_summary": zod.record(zod.string(), zod.unknown()),
+  "insight": zod.string(),
+  "vendors": zod.array(zod.record(zod.string(), zod.unknown())),
+  "radius_levels": zod.array(zod.record(zod.string(), zod.unknown())),
+  "multi_vendor_fulfillment": zod.record(zod.string(), zod.unknown()).nullish()
+})
+})
+
+
+/**
  * @summary Compare vendors for a purchase request
  */
 export const GetVendorComparisonParams = zod.object({
